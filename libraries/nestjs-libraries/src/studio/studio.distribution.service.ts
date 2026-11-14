@@ -90,7 +90,9 @@ const errorMessages: Record<string, string> = {
   media_changed:
     'O arquivo mudou depois da preparação do plano. Refaça a revisão antes de outro envio.',
   short_unverified:
-    'O arquivo não foi confirmado como vídeo vertical ou quadrado de até três minutos.',
+    'O arquivo não foi confirmado como vídeo vertical ou quadrado de três segundos a três minutos.',
+  instagram_image_invalid:
+    'Não foi possível validar a capa do Instagram. Use uma imagem JPEG de até 8 MB, com direitos e acesso confirmados.',
   processing_failed:
     'A plataforma recusou ou não concluiu o processamento do vídeo.',
   public_not_confirmed:
@@ -523,11 +525,11 @@ export class StudioDistributionService {
       if (
         mirror &&
         (inspection.durationSeconds > 180 ||
-          inspection.durationSeconds <= 0 ||
+          inspection.durationSeconds < 3 ||
           inspection.width > inspection.height)
       )
         throw new BadRequestException(
-          'O espelhamento exige vídeo medido de até três minutos, vertical ou quadrado.'
+          'O espelhamento exige vídeo medido de três segundos a três minutos, vertical ou quadrado.'
         );
       const description = this.packageText(youtubePackage);
       const caption = mirror ? this.packageText(instagramPackage!) : '';
@@ -565,6 +567,16 @@ export class StudioDistributionService {
         const asset = media.find((asset) => asset.id === id)!;
         return { id: asset.id, path: asset.path };
       };
+      const instagramThumbnail = mirror
+        ? cover(instagramPackage!.thumbnailMediaId)
+        : undefined;
+      if (instagramThumbnail)
+        await this.production.assertInstagramImage(
+          organizationId,
+          project.document,
+          instagramThumbnail.id,
+          'cover'
+        );
       items.push({
         projectId: project.id,
         projectRevision: project.revision,
@@ -601,7 +613,7 @@ export class StudioDistributionService {
                   internalId: mirror.internalId,
                   provider: mirror.providerIdentifier,
                   caption,
-                  thumbnail: cover(instagramPackage!.thumbnailMediaId),
+                  thumbnail: instagramThumbnail,
                 },
               }
             : {}),
@@ -705,6 +717,17 @@ export class StudioDistributionService {
       this.studio.requireApproval(project, 'package');
       if (project.approvals.package!.hash !== item.packageHash)
         throw new ConflictException('A aprovação mudou. Prepare outro plano.');
+      const snapshot = this.snapshot(item);
+      if (
+        snapshot.instagram &&
+        (snapshot.media.durationSeconds < 3 ||
+          snapshot.media.durationSeconds > 180 ||
+          snapshot.media.width > snapshot.media.height)
+      )
+        throw new BadRequestException(
+          'O espelhamento exige vídeo medido de três segundos a três minutos, vertical ou quadrado.'
+        );
+      await this.assertInstagramCover(organizationId, snapshot);
     }
     batch = await this.repository.confirm(
       organizationId,
@@ -745,7 +768,26 @@ export class StudioDistributionService {
       Math.abs(measured.durationSeconds - snapshot.media.durationSeconds) > 0.05
     )
       throw new StudioDistributionProviderError('media_changed', true);
+    if (
+      snapshot.instagram &&
+      (measured.durationSeconds < 3 ||
+        measured.durationSeconds > 180 ||
+        measured.width > measured.height)
+    )
+      throw new StudioDistributionProviderError('short_unverified', true);
     return measured;
+  }
+  private async assertInstagramCover(
+    organizationId: string,
+    snapshot: StudioDistributionSnapshot
+  ) {
+    if (snapshot.instagram?.thumbnail)
+      await this.production.assertInstagramImage(
+        organizationId,
+        snapshot.document,
+        snapshot.instagram.thumbnail.id,
+        'cover'
+      );
   }
   private async session(item: StoredItem): Promise<StudioYoutubeSession> {
     if (!item.uploadSession)
@@ -1329,11 +1371,20 @@ export class StudioDistributionService {
       const measured = await this.unchanged(organizationId, item);
       if (
         measured.width > measured.height ||
+        measured.durationSeconds < 3 ||
         measured.durationSeconds > 180 ||
-        observed.video.durationSeconds <= 0 ||
+        observed.video.durationSeconds < 3 ||
         observed.video.durationSeconds > 180
       )
         throw new StudioDistributionProviderError('short_unverified', true);
+      try {
+        await this.assertInstagramCover(organizationId, snapshot);
+      } catch {
+        throw new StudioDistributionProviderError(
+          'instagram_image_invalid',
+          true
+        );
+      }
       const connection = await this.connections.get(
         organizationId,
         item.instagramIntegrationId!,

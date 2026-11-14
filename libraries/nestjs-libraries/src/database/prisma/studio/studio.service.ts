@@ -744,6 +744,34 @@ export class StudioService {
       const thumbnail = item.thumbnailMediaId
         ? media.find((asset) => asset.id === item.thumbnailMediaId)
         : undefined;
+      if (target.platform === 'instagram') {
+        for (const mediaId of item.mediaIds) {
+          if (
+            currentDocument.media.find((asset) => asset.id === mediaId)
+              ?.kind === 'image'
+          )
+            await this.production.assertInstagramImage(
+              org,
+              currentDocument,
+              mediaId,
+              'post'
+            );
+        }
+        if (
+          thumbnail &&
+          item.mediaIds.some(
+            (mediaId) =>
+              currentDocument.media.find((asset) => asset.id === mediaId)
+                ?.kind === 'video'
+          )
+        )
+          await this.production.assertInstagramImage(
+            org,
+            currentDocument,
+            thumbnail.id,
+            'cover'
+          );
+      }
       const settings = provider.studioDraftSettings({
         title: item.title,
         tags: item.hashtags.map((tag) => tag.replace(/^#+/, '')),
@@ -763,8 +791,15 @@ export class StudioService {
               const isVideo =
                 currentDocument.media.find((item) => item.id === id)?.kind ===
                 'video';
-              const mediaThumbnail =
-                (isVideo && thumbnail?.path) || asset.thumbnail;
+              // Instagram requires a JPEG cover. Only the explicitly approved
+              // and inspected project asset may become cover_url; otherwise let
+              // the provider choose its normal video frame.
+              const mediaThumbnail = isVideo
+                ? thumbnail?.path ||
+                  (target.platform === 'instagram'
+                    ? undefined
+                    : asset.thumbnail)
+                : asset.thumbnail;
               return {
                 id: asset.id,
                 path: asset.path,

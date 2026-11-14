@@ -22,7 +22,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import sharp from 'sharp';
+import sharp, { type Metadata as SharpMetadata } from 'sharp';
 import OpenAI from 'openai';
 import pLimit from 'p-limit';
 import {
@@ -311,15 +311,69 @@ export class StudioProductionService {
     orgId: string,
     path: string,
     kind: 'image' | 'video',
-    name: string
+    name: string,
+    imageFormat: 'png' | 'jpeg' = 'png'
   ) {
+    if (kind === 'image' && imageFormat === 'jpeg') {
+      const destination = `${path}.jpg`;
+      await sharp(path)
+        .flatten({ background: '#ffffff' })
+        .toColourspace('srgb')
+        .jpeg({ quality: 90 })
+        .toFile(destination);
+      path = destination;
+    }
     const storage = UploadFactory.createStorage();
     const uploaded = await storage.uploadStream(
       createReadStream(path),
-      kind === 'video' ? 'video/mp4' : 'image/png',
-      kind === 'video' ? 'mp4' : 'png'
+      kind === 'video' ? 'video/mp4' : `image/${imageFormat}`,
+      kind === 'video' ? 'mp4' : imageFormat === 'jpeg' ? 'jpg' : 'png'
     );
     return this.media.saveFile(orgId, uploaded.filename, uploaded.path, name);
+  }
+
+  /** Check the approved asset before reserving a publication; never convert it after approval. */
+  async assertInstagramImage(
+    orgId: string,
+    document: StudioDocument,
+    mediaId: string,
+    role: 'post' | 'cover'
+  ): Promise<void> {
+    const dir = await mkdtemp(join(tmpdir(), 'postiz-studio-instagram-image-'));
+    try {
+      const path = await this.material(
+        orgId,
+        document,
+        mediaId,
+        join(dir, 'image'),
+        'image'
+      );
+      if ((await stat(path)).size > 8 * 1024 * 1024)
+        throw new BadRequestException(
+          'A imagem do Instagram precisa ter no máximo 8 MB. Exporte um JPEG menor e aprove o pacote novamente.'
+        );
+      let metadata: SharpMetadata;
+      try {
+        metadata = await sharp(path).metadata();
+      } catch {
+        throw new BadRequestException(
+          'A imagem do Instagram não pôde ser lida. Selecione um JPEG válido e aprove o pacote novamente.'
+        );
+      }
+      if (metadata.format !== 'jpeg' || !metadata.width || !metadata.height)
+        throw new BadRequestException(
+          'O Instagram exige JPEG nas imagens e capas. Gere uma nova capa ou exporte a imagem em JPEG e aprove o pacote novamente.'
+        );
+      const width = metadata.autoOrient?.width || metadata.width;
+      const height = metadata.autoOrient?.height || metadata.height;
+      const ratio = width / height;
+      if (role === 'post' && (ratio < 4 / 5 || ratio > 1.91))
+        throw new BadRequestException(
+          'A imagem do post Instagram precisa ter proporção entre 4:5 e 1,91:1. Ajuste a composição e aprove o pacote novamente.'
+        );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   }
 
   private lines(value: string, width: number, maximum: number) {
@@ -831,7 +885,8 @@ export class StudioProductionService {
           orgId,
           path,
           'image',
-          `${kind}-${index + 1}.png`
+          `${kind}-${index + 1}.jpg`,
+          'jpeg'
         );
         result.push({
           id: saved.id,
@@ -942,7 +997,8 @@ export class StudioProductionService {
           orgId,
           destination,
           'image',
-          `capa-${format}-${index + 1}.png`
+          `capa-${format}-${index + 1}.jpg`,
+          'jpeg'
         );
         result.push({
           id: saved.id,

@@ -79,7 +79,8 @@ Se o upload termina depois da antecedência segura, o worker não aplica uma dat
 ## Espelhamento e limites
 
 - Somente Reel com o mesmo arquivo nos pacotes aprovados de YouTube e Instagram.
-- Duração medida de até 180 segundos, largura menor ou igual à altura, licença registrada e hash estável. A medida do arquivo é conferida novamente antes do envio.
+- Duração medida de 3 a 180 segundos, largura menor ou igual à altura, licença registrada e hash estável. A medida do arquivo é conferida novamente antes do envio.
+- Capa opcional em JPEG de até 8 MB. A validação confere os bytes, direitos e acesso da organização durante o plano, antes da confirmação e novamente antes de criar o contêiner. Uma extensão de arquivo `.jpg` sem conteúdo JPEG não atende à regra.
 - O YouTube deve responder público e processado antes da criação do contêiner e novamente antes da publicação Instagram.
 - O limite de publicação da Meta é consultado antes de criar e de publicar o contêiner. Ausência de dados de cota não é tratada como saldo disponível.
 - Chave durável por vídeo YouTube e identificador da conta Instagram. A consulta de um item já espelhado é terminal e não o coloca novamente na fila.

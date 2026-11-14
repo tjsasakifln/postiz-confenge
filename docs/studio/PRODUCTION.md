@@ -20,9 +20,11 @@ A identidade pode guardar nome da marca, duas cores e uma das famílias tipográ
 |---|---|
 | Direções de marca | Três cartelas para comparação. |
 | Conjunto de marca | Logo transparente 1200×320, avatar 800×800, banner 2560×1440 e marca d'água transparente 150×150, a partir de uma direção geométrica escolhida. |
-| Capas por quadro | Três imagens a partir de quadros em 20%, 50% e 80% da duração do vídeo escolhido, em formato vertical ou horizontal. Até três palavras são sobrepostas para revisão. |
-| Capas tipográficas | Três composições horizontais com texto e variações de cor. |
-| Carrossel | Até dez imagens quadradas, seguindo a ordem das cenas. |
+| Capas por quadro | Três JPEGs a partir de quadros em 20%, 50% e 80% da duração do vídeo escolhido, em formato vertical ou horizontal. Até três palavras são sobrepostas para revisão. |
+| Capas tipográficas | Três JPEGs com composições horizontais com texto e variações de cor. |
+| Carrossel | Até dez JPEGs quadrados, seguindo a ordem das cenas. |
+
+Capas e carrosséis são exportados em JPEG, aceito pelo Instagram. O conjunto de marca mantém PNG e transparência quando prevista. Imagens externas do pacote Instagram são verificadas pelos bytes, limite de 8 MB e, em posts/carrosséis, proporção entre 4:5 e 1,91:1. Um arquivo incompatível é recusado antes da reserva, com orientação para nova exportação e aprovação; não há conversão silenciosa após aprovar. [Fonte: especificações de mídia da Meta](https://developers.facebook.com/documentation/instagram-platform/instagram-graph-api/reference/ig-user/media).
 
 O banner mantém a marca e o texto dentro de um retângulo central conservador de 1235×338. A documentação oficial do YouTube informa a dimensão recomendada de 2560×1440 e a área de segurança de 1235×338 na dimensão mínima de upload. O arquivo precisa ser conferido na prévia do canal, que aplica cortes por dispositivo. [Fonte: orientações de marca do YouTube](https://support.google.com/youtube/answer/10456525?hl=pt-BR).
 

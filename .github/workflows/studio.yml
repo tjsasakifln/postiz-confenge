@@ -17,7 +17,8 @@ permissions:
   contents: read
 jobs:
   studio:
-    runs-on: ubuntu-latest
+    # Playwright 1.58.2 supports this image; ubuntu-latest may advance independently.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
       postgres:

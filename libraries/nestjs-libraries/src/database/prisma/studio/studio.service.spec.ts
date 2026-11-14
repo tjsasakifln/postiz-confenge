@@ -132,6 +132,7 @@ function fixture() {
       available: false,
       reason: 'Sem FFmpeg',
     })),
+    assertInstagramImage: vi.fn(async () => undefined),
   };
   const manager = {
     getSocialIntegration: vi.fn(() => ({
@@ -161,7 +162,7 @@ function fixture() {
         approvedAt: new Date().toISOString(),
       };
   }
-  return { row, repo, posts, writer, service, manager, approve };
+  return { row, repo, posts, writer, service, manager, production, approve };
 }
 
 describe('Studio: ownership, approvals and publication boundaries', () => {
@@ -397,7 +398,8 @@ describe('Studio: ownership, approvals and publication boundaries', () => {
   ] as const)(
     'passes the selected video cover to the %s draft media payload (selected=%s) and preserves image thumbnails',
     async (platform, selected) => {
-      const { service, row, repo, posts, manager, approve } = fixture();
+      const { service, row, repo, posts, manager, production, approve } =
+        fixture();
       const media = [
         {
           id: 'video-a',
@@ -456,9 +458,14 @@ describe('Studio: ownership, approvals and publication boundaries', () => {
         {
           id: 'video-a',
           path: 'https://assets.example.org/video.mp4',
-          thumbnail: selected
-            ? 'https://assets.example.org/selected-cover.jpg'
-            : 'https://assets.example.org/existing-video-cover.jpg',
+          ...(selected
+            ? { thumbnail: 'https://assets.example.org/selected-cover.jpg' }
+            : platform === 'instagram'
+            ? {}
+            : {
+                thumbnail:
+                  'https://assets.example.org/existing-video-cover.jpg',
+              }),
         },
         {
           id: 'image-a',
@@ -466,6 +473,91 @@ describe('Studio: ownership, approvals and publication boundaries', () => {
           thumbnail: 'https://assets.example.org/existing-image-thumbnail.jpg',
         },
       ]);
+      if (platform === 'instagram') {
+        expect(production.assertInstagramImage).toHaveBeenCalledWith(
+          'org-a',
+          expect.anything(),
+          'image-a',
+          'post'
+        );
+        if (selected)
+          expect(production.assertInstagramImage).toHaveBeenCalledWith(
+            'org-a',
+            expect.anything(),
+            'cover-a',
+            'cover'
+          );
+        else expect(production.assertInstagramImage).toHaveBeenCalledTimes(1);
+      } else {
+        expect(production.assertInstagramImage).not.toHaveBeenCalled();
+      }
+    }
+  );
+
+  it.each(['post', 'cover'] as const)(
+    'rejects an incompatible Instagram %s before reserving any draft in the batch',
+    async (role) => {
+      const { service, row, repo, posts, production, approve } = fixture();
+      const asset = {
+        id: 'png-a',
+        name: 'external.png',
+        path: 'https://assets.example.org/external.png',
+      };
+      const video = {
+        id: 'video-a',
+        name: 'video.mp4',
+        path: 'https://assets.example.org/video.mp4',
+      };
+      const media = [asset, ...(role === 'cover' ? [video] : [])];
+      row.document.media = [
+        { ...asset, kind: 'image', license: 'owned' },
+        ...(role === 'cover'
+          ? [{ ...video, kind: 'video', license: 'owned' }]
+          : []),
+      ];
+      row.document.packages.push({
+        ...row.document.packages[0],
+        platform: 'instagram',
+        mediaIds: role === 'post' ? [asset.id] : [video.id],
+        ...(role === 'cover' ? { thumbnailMediaId: asset.id } : {}),
+      });
+      repo.media.mockResolvedValue(media as any);
+      repo.integrations.mockResolvedValue([
+        { id: 'channel-a', name: 'Canal A', providerIdentifier: 'linkedin' },
+        {
+          id: 'instagram-a',
+          name: 'Instagram A',
+          providerIdentifier: 'instagram',
+        },
+      ]);
+      production.assertInstagramImage.mockRejectedValueOnce(
+        new BadRequestException(
+          'O Instagram exige uma imagem JPEG. Converta, registre e aprove o novo arquivo.'
+        )
+      );
+      approve();
+      await expect(
+        service.createDrafts(
+          'org-a',
+          row.id,
+          {
+            revision: 1,
+            targets: [
+              { platform: 'linkedin', integrationId: 'channel-a' },
+              { platform: 'instagram', integrationId: 'instagram-a' },
+            ],
+          },
+          'user'
+        )
+      ).rejects.toThrow('JPEG');
+      expect(production.assertInstagramImage).toHaveBeenCalledWith(
+        'org-a',
+        expect.anything(),
+        asset.id,
+        role
+      );
+      expect(repo.claimDraft).not.toHaveBeenCalled();
+      expect(posts.createPost).not.toHaveBeenCalled();
     }
   );
 
@@ -565,25 +657,47 @@ describe('Studio: ownership, approvals and publication boundaries', () => {
       note: '',
       occurredAt: '2026-01-01T00:00:00Z',
     };
-    expect(await validate(plainToInstance(StudioOutcomeDto, base))).toHaveLength(0);
+    expect(
+      await validate(plainToInstance(StudioOutcomeDto, base))
+    ).toHaveLength(0);
     for (const field of ['externalId', 'valueCents']) {
       const errors = await validate(
         plainToInstance(StudioOutcomeDto, { ...base, [field]: null })
       );
       expect(errors.map((error) => error.property)).toContain(field);
     }
-    for (const stage of ['proposal', 'contract', 'invoiced', 'received'] as const) {
+    for (const stage of [
+      'proposal',
+      'contract',
+      'invoiced',
+      'received',
+    ] as const) {
       for (const valueCents of [null, undefined]) {
         await expect(
-          service.outcome('org-a', 'project-a', { ...base, stage, valueCents } as any, 'user')
+          service.outcome(
+            'org-a',
+            'project-a',
+            { ...base, stage, valueCents } as any,
+            'user'
+          )
         ).rejects.toBeInstanceOf(BadRequestException);
       }
     }
     await expect(
-      service.outcome('org-a', 'project-a', { ...base, externalId: null } as any, 'user')
+      service.outcome(
+        'org-a',
+        'project-a',
+        { ...base, externalId: null } as any,
+        'user'
+      )
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repo.outcome).not.toHaveBeenCalled();
-    await service.outcome('org-a', 'project-a', { ...base, stage: 'proposal', valueCents: 0 }, 'user');
+    await service.outcome(
+      'org-a',
+      'project-a',
+      { ...base, stage: 'proposal', valueCents: 0 },
+      'user'
+    );
     expect(repo.outcome).toHaveBeenCalledTimes(1);
   });
 

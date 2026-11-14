@@ -140,6 +140,7 @@ describe('Studio production with real FFmpeg and recorded audio', () => {
     for (const [index, file] of files.entries()) {
       const path = join(dir, 'uploads', file.path.split('/uploads/')[1]);
       const info = await sharp(path).metadata();
+      expect(info.format).toBe('png');
       expect([info.width, info.height]).toEqual(expected[index]);
       if (index === 3) {
         expect(info.hasAlpha).toBe(true);
@@ -171,6 +172,7 @@ describe('Studio production with real FFmpeg and recorded audio', () => {
       const info = await sharp(
         join(dir, 'uploads', cover.path.split('/uploads/')[1])
       ).metadata();
+      expect(info.format).toBe('jpeg');
       expect([info.width, info.height]).toEqual([1080, 1920]);
       expect(cover.license).toBe('licensed');
       expect(cover.sourceUrl).toBe('https://example.com/license');
@@ -240,16 +242,82 @@ describe('Studio production with real FFmpeg and recorded audio', () => {
     });
   }
 
-  it('generates three usable PNG covers and a carousel', async () => {
+  it('generates three usable JPEG covers and a JPEG carousel for the social providers', async () => {
     const covers = await service.images('org-a', document(), 'thumbnails');
     expect(covers).toHaveLength(3);
     const bytes = await readFile(
       join(dir, 'uploads', covers[0].path.split('/uploads/')[1])
     );
-    expect(bytes.subarray(1, 4).toString()).toBe('PNG');
-    expect(await service.images('org-a', document(), 'carousel')).toHaveLength(
-      1
+    expect((await sharp(bytes).metadata()).format).toBe('jpeg');
+    expect(covers[0].path).toMatch(/\.jpg$/);
+    const carousel = await service.images('org-a', document(), 'carousel');
+    expect(carousel).toHaveLength(1);
+    const doc = document();
+    doc.media.push({ id: carousel[0].id, kind: 'image', license: 'owned' });
+    await expect(
+      service.assertInstagramImage('org-a', doc, carousel[0].id, 'post')
+    ).resolves.toBeUndefined();
+  });
+
+  it('checks actual JPEG bytes, size, proportions and organization before Instagram distribution', async () => {
+    const doc = document();
+    const add = async (id: string, bytes: Buffer) => {
+      await writeFile(join(dir, 'uploads', `${id}.jpg`), bytes);
+      files.set(id, {
+        id,
+        name: `${id}.jpg`,
+        path: `https://studio.test/uploads/${id}.jpg`,
+        status: 'ready',
+      });
+      doc.media.push({ id, kind: 'image', license: 'owned' });
+    };
+    const pixels = {
+      width: 400,
+      height: 800,
+      channels: 3 as const,
+      background: '#f9733d',
+    };
+    await add(
+      'png-with-jpg-name',
+      await sharp({ create: pixels }).png().toBuffer()
     );
+    await expect(
+      service.assertInstagramImage('org-a', doc, 'png-with-jpg-name', 'cover')
+    ).rejects.toThrow('exige JPEG');
+    const tallJpeg = await sharp({ create: pixels }).jpeg().toBuffer();
+    await add('tall-jpeg', tallJpeg);
+    await expect(
+      service.assertInstagramImage('org-a', doc, 'tall-jpeg', 'post')
+    ).rejects.toThrow('proporção');
+    await expect(
+      service.assertInstagramImage('org-a', doc, 'tall-jpeg', 'cover')
+    ).resolves.toBeUndefined();
+    await expect(
+      service.assertInstagramImage('org-b', doc, 'tall-jpeg', 'cover')
+    ).rejects.toThrow('organização');
+    await add(
+      'rotated-landscape',
+      await sharp({ create: { ...pixels, height: 600 } })
+        .withMetadata({ orientation: 6 }).jpeg().toBuffer()
+    );
+    await expect(
+      service.assertInstagramImage('org-a', doc, 'rotated-landscape', 'post')
+    ).resolves.toBeUndefined();
+    await add(
+      'rotated-tall',
+      await sharp({ create: { ...pixels, width: 600, height: 400 } })
+        .withMetadata({ orientation: 6 }).jpeg().toBuffer()
+    );
+    await expect(
+      service.assertInstagramImage('org-a', doc, 'rotated-tall', 'post')
+    ).rejects.toThrow('proporção');
+    await add(
+      'large-jpeg',
+      Buffer.concat([tallJpeg, Buffer.alloc(8 * 1024 * 1024)])
+    );
+    await expect(
+      service.assertInstagramImage('org-a', doc, 'large-jpeg', 'cover')
+    ).rejects.toThrow('8 MB');
   });
 
   it('mixes an optional original sound without extending narration or captions', async () => {

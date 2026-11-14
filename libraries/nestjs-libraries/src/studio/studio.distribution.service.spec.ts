@@ -1,6 +1,10 @@
 import 'reflect-metadata';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   StudioDistributionService,
   studioQuotaDay,
@@ -44,7 +48,7 @@ const inspection = {
   height: 1920,
   sha256: 'bytes-hash',
 };
-function fixture(phase = 'planned', mirror = false) {
+function fixture(phase = 'planned', mirror = false, withCover = false) {
   const pack = (platform: string) => ({
     platform,
     title: 'Briefing de projeto',
@@ -56,6 +60,9 @@ function fixture(phase = 'planned', mirror = false) {
     utmMedium: 'organic_social',
     utmCampaign: 'briefing',
     mediaIds: ['media-a'],
+    ...(platform === 'instagram' && withCover
+      ? { thumbnailMediaId: 'cover-a' }
+      : {}),
   });
   const document: any = {
     brief: 'Projetos para construtoras.',
@@ -72,6 +79,17 @@ function fixture(phase = 'planned', mirror = false) {
         kind: 'video',
         license: 'owned',
       },
+      ...(withCover
+        ? [
+            {
+              id: 'cover-a',
+              name: 'cover.jpg',
+              path: 'https://assets.example.org/cover.jpg',
+              kind: 'image',
+              license: 'owned',
+            },
+          ]
+        : []),
     ],
     renders: [],
   };
@@ -103,6 +121,14 @@ function fixture(phase = 'planned', mirror = false) {
             internalId: 'instagram-real-a',
             provider: 'instagram',
             caption: 'Prepare um briefing.',
+            ...(withCover
+              ? {
+                  thumbnail: {
+                    id: 'cover-a',
+                    path: 'https://assets.example.org/cover.jpg',
+                  },
+                }
+              : {}),
           },
         }
       : {}),
@@ -275,6 +301,7 @@ function fixture(phase = 'planned', mirror = false) {
   const production = {
     capabilities: vi.fn(async () => ({ available: true })),
     inspectForDistribution: vi.fn(async () => ({ ...inspection })),
+    assertInstagramImage: vi.fn(async () => {}),
   };
   const connections = {
     get: vi.fn(async (_org, id) => ({
@@ -309,7 +336,9 @@ function fixture(phase = 'planned', mirror = false) {
     permissionHint: 'instagram_content_publish',
     preflight: vi.fn(async () => {}),
     checkQuota: vi.fn(async () => {}),
-    create: vi.fn(async () => 'container-a'),
+    create: vi.fn(
+      async (_connection: unknown, _snapshot: any) => 'container-a'
+    ),
     container: vi.fn(async () => 'FINISHED'),
     publish: vi.fn(async () => 'ig-media-a'),
     media: vi.fn(async () => ({
@@ -398,7 +427,7 @@ describe('Studio distribution explicit scheduling and durable uncertainty', () =
     expect(youtube.schedule).not.toHaveBeenCalled();
     expect(instagram.create).not.toHaveBeenCalled();
   });
-  it('refuses a claimed short whose actual bytes are horizontal or too long', async () => {
+  it('refuses a claimed short whose actual bytes are horizontal, too short or too long', async () => {
     const { service, body, production, repo } = fixture('planned', true);
     production.inspectForDistribution.mockResolvedValue({
       ...inspection,
@@ -415,7 +444,79 @@ describe('Studio distribution explicit scheduling and durable uncertainty', () =
     await expect(service.plan('org-a', 'user-a', body)).rejects.toThrow(
       'três minutos'
     );
+    production.inspectForDistribution.mockResolvedValue({
+      ...inspection,
+      durationSeconds: 2.99,
+    });
+    await expect(service.plan('org-a', 'user-a', body)).rejects.toThrow(
+      'três segundos'
+    );
     expect(repo.plan).not.toHaveBeenCalled();
+  });
+  it.each([3, 180])(
+    'accepts the measured Reel duration boundary of %s seconds',
+    async (durationSeconds) => {
+      const { service, body, production, repo } = fixture('planned', true);
+      production.inspectForDistribution.mockResolvedValue({
+        ...inspection,
+        durationSeconds,
+      });
+      await service.plan('org-a', 'user-a', body);
+      expect(repo.plan).toHaveBeenCalledTimes(1);
+    }
+  );
+  it('rejects an invalid Instagram cover before saving a plan or starting remote work', async () => {
+    const { service, body, project, production, repo, youtube, instagram } =
+      fixture('planned', true, true);
+    production.assertInstagramImage.mockRejectedValue(
+      new BadRequestException('A capa precisa conter JPEG de até 8 MB.')
+    );
+    await expect(service.plan('org-a', 'user-a', body)).rejects.toThrow('JPEG');
+    expect(production.assertInstagramImage).toHaveBeenCalledWith(
+      'org-a',
+      project.document,
+      'cover-a',
+      'cover'
+    );
+    expect(repo.plan).not.toHaveBeenCalled();
+    expect(youtube.start).not.toHaveBeenCalled();
+    expect(instagram.create).not.toHaveBeenCalled();
+  });
+  it('revalidates the Instagram cover before confirmation commits quota or starts the workflow', async () => {
+    const { service, body, production, repo, workflow } = fixture(
+      'planned',
+      true,
+      true
+    );
+    await service.plan('org-a', 'user-a', body);
+    production.assertInstagramImage.mockRejectedValue(
+      new BadRequestException('A capa precisa conter JPEG de até 8 MB.')
+    );
+    await expect(
+      service.confirm(
+        'org-a',
+        'batch-a',
+        { revision: 1, confirmed: true },
+        'user-a'
+      )
+    ).rejects.toThrow('JPEG');
+    expect(production.assertInstagramImage).toHaveBeenCalledTimes(2);
+    expect(repo.confirm).not.toHaveBeenCalled();
+    expect(workflow.start).not.toHaveBeenCalled();
+  });
+  it('refuses confirmation of a stored mirror plan shorter than three seconds without reserving quota', async () => {
+    const { service, body, snapshot, repo } = fixture('planned', true);
+    await service.plan('org-a', 'user-a', body);
+    snapshot.media.durationSeconds = 2.99;
+    await expect(
+      service.confirm(
+        'org-a',
+        'batch-a',
+        { revision: 1, confirmed: true },
+        'user-a'
+      )
+    ).rejects.toThrow('três segundos');
+    expect(repo.confirm).not.toHaveBeenCalled();
   });
   it('rejects other-organization accounts, missing approval, ambiguous dates and a raised budget', async () => {
     const { service, body, project, repo } = fixture();
@@ -581,6 +682,87 @@ describe('Studio distribution explicit scheduling and durable uncertainty', () =
     expect(instagram.publish).toHaveBeenCalledTimes(1);
     expect(instagram.create).not.toHaveBeenCalled();
   });
+  it('revalidates the stored cover before creating a Reel and fails safely if its bytes are no longer acceptable', async () => {
+    const { service, item, snapshot, production, youtube, instagram, repo } =
+      fixture('mirror_waiting', true, true);
+    item.youtubeVideoId = 'yt-video-a';
+    item.youtubePublicConfirmedAt = now;
+    youtube.observe.mockResolvedValue({
+      id: 'yt-video-a',
+      privacy: 'public',
+      uploadStatus: 'processed',
+      durationSeconds: 45,
+    });
+    production.assertInstagramImage.mockRejectedValue(
+      new BadRequestException('A capa precisa conter JPEG de até 8 MB.')
+    );
+    await service.advance('org-a', 'batch-a');
+    expect(production.assertInstagramImage).toHaveBeenCalledWith(
+      'org-a',
+      snapshot.document,
+      'cover-a',
+      'cover'
+    );
+    expect(instagram.create).not.toHaveBeenCalled();
+    expect(instagram.publish).not.toHaveBeenCalled();
+    expect(item.errorCode).toBe('instagram_image_invalid');
+    expect(item.instagramReservationReleased).toBe(true);
+    expect(item.youtubeReservationReleased).toBe(false);
+    expect(repo.releaseMirror).toHaveBeenCalledTimes(1);
+  });
+  it('passes the verified approved cover into one Reel container creation', async () => {
+    const { service, item, snapshot, production, youtube, instagram } = fixture(
+      'mirror_waiting',
+      true,
+      true
+    );
+    item.youtubeVideoId = 'yt-video-a';
+    item.youtubePublicConfirmedAt = now;
+    youtube.observe.mockResolvedValue({
+      id: 'yt-video-a',
+      privacy: 'public',
+      uploadStatus: 'processed',
+      durationSeconds: 45,
+    });
+    await service.advance('org-a', 'batch-a');
+    expect(production.assertInstagramImage).toHaveBeenCalledWith(
+      'org-a',
+      snapshot.document,
+      'cover-a',
+      'cover'
+    );
+    expect(instagram.create).toHaveBeenCalledTimes(1);
+    expect(instagram.create.mock.calls[0][1].instagram.thumbnail).toEqual(
+      snapshot.instagram.thumbnail
+    );
+    expect(item.phase).toBe('mirror_processing');
+  });
+  it.each(['measured', 'youtube'] as const)(
+    'blocks a Reel when the %s duration is shorter than three seconds',
+    async (source) => {
+      const { service, item, snapshot, production, youtube, instagram } =
+        fixture('mirror_waiting', true);
+      item.youtubeVideoId = 'yt-video-a';
+      item.youtubePublicConfirmedAt = now;
+      if (source === 'measured') {
+        snapshot.media.durationSeconds = 2.99;
+        production.inspectForDistribution.mockResolvedValue({
+          ...inspection,
+          durationSeconds: 2.99,
+        });
+      }
+      youtube.observe.mockResolvedValue({
+        id: 'yt-video-a',
+        privacy: 'public',
+        uploadStatus: 'processed',
+        durationSeconds: source === 'youtube' ? 2.99 : 45,
+      });
+      await service.advance('org-a', 'batch-a');
+      expect(instagram.create).not.toHaveBeenCalled();
+      expect(instagram.publish).not.toHaveBeenCalled();
+      expect(item.errorCode).toBe('short_unverified');
+    }
+  );
   it('does not re-create a container when its response was lost and no container id is known', async () => {
     const { service, item, youtube, instagram, repo } = fixture(
       'uncertain',
