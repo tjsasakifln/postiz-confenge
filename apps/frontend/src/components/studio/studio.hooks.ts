@@ -25,7 +25,15 @@ export const useStudioRequest = () => {
   const fetch = useFetch();
   return useCallback(
     async <T>(path: string, options?: RequestInit): Promise<T> => {
-      const response = await fetch(path, options);
+      let response: Response;
+      try {
+        response = await fetch(path, options);
+      } catch {
+        throw new StudioRequestError(
+          'Não foi possível conectar ao serviço. Confira a conexão e tente novamente.',
+          0
+        );
+      }
       const raw = await response.text();
       let body: unknown;
       try {

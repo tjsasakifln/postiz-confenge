@@ -9,7 +9,9 @@ import {
 } from '@testing-library/react';
 import type {
   StudioAudienceCapabilities,
+  StudioAudienceMetrics,
   StudioAudienceThread,
+  StudioAudienceThreadsResponse,
 } from '@gitroom/helpers/studio/studio.audience.types';
 import type { StudioDocument } from '@gitroom/helpers/studio/studio.types';
 import { StudioAudience, StudioAudienceThreadCard } from './studio.audience';
@@ -21,10 +23,14 @@ vi.mock('./studio.hooks', () => ({
     data: {
       integrations: [],
       textGeneration: { available: false, reason: '' },
-    },
+    } as StudioAudienceCapabilities,
   }),
   useStudioAudienceThreads: () => ({
-    data: { threads: [], coverage: [], limit: 25 },
+    data: {
+      threads: [],
+      coverage: [],
+      limit: 25,
+    } as StudioAudienceThreadsResponse,
     mutate: vi.fn(),
   }),
   useStudioAudienceMetrics: () => ({
@@ -43,7 +49,7 @@ vi.mock('./studio.hooks', () => ({
           postIds: ['post-test'],
         },
       ],
-    },
+    } as StudioAudienceMetrics,
     mutate: vi.fn(),
     isValidating: false,
   }),

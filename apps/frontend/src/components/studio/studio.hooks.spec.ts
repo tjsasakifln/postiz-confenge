@@ -10,6 +10,17 @@ beforeEach(() => fetch.mockReset());
 afterEach(cleanup);
 
 describe('Erros da API permanecem visíveis', () => {
+  it('reports a connection failure without exposing internal connection details', async () => {
+    fetch.mockRejectedValueOnce(new Error('Internal transport detail'));
+    const { result } = renderHook(useStudioRequest);
+    await expect(result.current('/studio/projects/test')).rejects.toMatchObject(
+      {
+        message:
+          'Não foi possível conectar ao serviço. Confira a conexão e tente novamente.',
+        status: 0,
+      }
+    );
+  });
   it('keeps a conflict as a typed failure and never returns empty success data', async () => {
     fetch.mockResolvedValueOnce(
       new Response(JSON.stringify({ message: 'A versão mudou.' }), {

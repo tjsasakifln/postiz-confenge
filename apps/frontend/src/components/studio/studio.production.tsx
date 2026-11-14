@@ -703,7 +703,7 @@ export const StudioProduction = ({
               label="Tentativa"
               value={retry}
               onChange={setRetry}
-              hint="Mantenha a original para consultar a mesma produção. Trocar a tentativa inicia um novo trabalho e pode consumir novamente o provedor."
+              hint="Na mesma versão e com as mesmas opções, a tentativa original recupera o mesmo trabalho. Alterar versão, opções ou tentativa pode iniciar outra geração e consumir novamente o provedor."
             >
               <option value="0">Original</option>
               <option value="1">Nova tentativa 1</option>

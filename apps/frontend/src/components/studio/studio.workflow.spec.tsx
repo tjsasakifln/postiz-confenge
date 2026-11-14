@@ -222,8 +222,31 @@ describe('Revisão humana e versões do conteúdo', () => {
 describe('Publicação e resultado comercial', () => {
   it('lets the editor type consecutive hashtags without losing the separating space', () => {
     const TagEditor = () => {
-      const [document, setDocument] = useState<StudioDocument>({ ...project().document, packages: [{ platform: 'linkedin', title: '', description: '', hashtags: ['obra'], cta: '', landingUrl: '', utmSource: '', utmMedium: '', utmCampaign: '', mediaIds: [] }] });
-      return <StudioPackagesEditor document={document} onChange={setDocument} onGenerate={() => {}} generateDisabled />;
+      const [document, setDocument] = useState<StudioDocument>({
+        ...project().document,
+        packages: [
+          {
+            platform: 'linkedin',
+            title: '',
+            description: '',
+            hashtags: ['obra'],
+            cta: '',
+            landingUrl: '',
+            utmSource: '',
+            utmMedium: '',
+            utmCampaign: '',
+            mediaIds: [],
+          },
+        ],
+      });
+      return (
+        <StudioPackagesEditor
+          document={document}
+          onChange={setDocument}
+          onGenerate={() => {}}
+          generateDisabled
+        />
+      );
     };
     render(<TagEditor />);
     const input = screen.getByLabelText('Hashtags') as HTMLInputElement;
