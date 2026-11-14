@@ -12,8 +12,12 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { StudioProductionService } from './studio.production.service';
+import {
+  StudioProductionService,
+  resolveStudioRenderOptions,
+} from './studio.production.service';
 import type { StudioDocument } from '@gitroom/helpers/studio/studio.types';
+import sharp from 'sharp';
 
 const execute = promisify(execFile);
 let dir: string;
@@ -93,6 +97,109 @@ afterAll(async () => {
 });
 
 describe('Studio production with real FFmpeg and recorded audio', () => {
+  it('uses the approved narration provider and refuses a switch to paid speech or missing recorded audio', () => {
+    const doc = document();
+    doc.identity.narration = { provider: 'local' };
+    expect(
+      resolveStudioRenderOptions(doc, { format: 'vertical' })
+    ).toMatchObject({ voice: 'local', language: 'pt-BR' });
+    expect(() =>
+      resolveStudioRenderOptions(doc, { format: 'vertical', voice: 'nova' })
+    ).toThrow('identidade aprovada');
+    doc.identity.narration = { provider: 'recorded' };
+    expect(
+      resolveStudioRenderOptions(doc, { format: 'vertical' }).voice
+    ).toBeUndefined();
+    delete doc.scenes[0].audioMediaId;
+    expect(() =>
+      resolveStudioRenderOptions(doc, { format: 'vertical' })
+    ).toThrow('áudio gravado');
+    doc.identity.narration = { provider: 'openai', voice: 'onyx' };
+    expect(resolveStudioRenderOptions(doc, { format: 'vertical' }).voice).toBe(
+      'onyx'
+    );
+    expect(() =>
+      resolveStudioRenderOptions(doc, { format: 'vertical', voice: 'local' })
+    ).toThrow('identidade aprovada');
+  });
+  it('creates a consistent logo, avatar, banner and transparent watermark', async () => {
+    const doc = document();
+    doc.identity.brandName = 'MARCA DE TESTE';
+    doc.identity.primaryColor = '#1367c2';
+    doc.identity.fontFamily = 'serif';
+    const files = await service.images('org-a', doc, 'brand-kit', {
+      variant: 2,
+    });
+    expect(files).toHaveLength(4);
+    const expected = [
+      [1200, 320],
+      [800, 800],
+      [2560, 1440],
+      [150, 150],
+    ];
+    for (const [index, file] of files.entries()) {
+      const path = join(dir, 'uploads', file.path.split('/uploads/')[1]);
+      const info = await sharp(path).metadata();
+      expect([info.width, info.height]).toEqual(expected[index]);
+      if (index === 3) {
+        expect(info.hasAlpha).toBe(true);
+        const { data, info: raw } = await sharp(path)
+          .ensureAlpha()
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        expect(data[raw.channels - 1]).toBe(0);
+      }
+    }
+  });
+
+  it('extracts three licensed video frames into vertical covers and rejects other organizations', async () => {
+    const rendered = await service.render('org-a', document(), {
+      format: 'square',
+    });
+    const doc = document();
+    doc.media.push({
+      id: rendered.id,
+      kind: 'video',
+      license: 'licensed',
+      sourceUrl: 'https://example.com/license',
+      attribution: 'Referência de teste.',
+    });
+    const options = { mediaId: rendered.id, format: 'vertical' as const };
+    const covers = await service.images('org-a', doc, 'frame-covers', options);
+    expect(covers).toHaveLength(3);
+    for (const cover of covers) {
+      const info = await sharp(
+        join(dir, 'uploads', cover.path.split('/uploads/')[1])
+      ).metadata();
+      expect([info.width, info.height]).toEqual([1080, 1920]);
+      expect(cover.license).toBe('licensed');
+      expect(cover.sourceUrl).toBe('https://example.com/license');
+      expect(cover.attribution).toContain(rendered.id);
+    }
+    await expect(
+      service.images('org-b', doc, 'frame-covers', options)
+    ).rejects.toThrow('organização');
+  });
+
+  it('uses local speech without an API key when espeak-ng is installed', async ({
+    skip,
+  }) => {
+    if (!(await service.capabilities()).localVoice) {
+      skip();
+      return;
+    }
+    const doc = document();
+    delete doc.scenes[0].audioMediaId;
+    doc.scenes[0].narration = 'Uma revisão de teste.';
+    delete doc.scenes[0].pronunciation;
+    const result = await service.render('org-a', doc, {
+      format: 'horizontal',
+      voice: 'local',
+      language: 'pt-BR',
+    });
+    expect(result.durationSeconds).toBeGreaterThan(0.5);
+    expect(result.subtitles).toContain('Uma revisão de teste.');
+  });
   for (const [format, width, height] of [
     ['vertical', 1080, 1920],
     ['horizontal', 1920, 1080],
@@ -143,6 +250,15 @@ describe('Studio production with real FFmpeg and recorded audio', () => {
     expect(await service.images('org-a', document(), 'carousel')).toHaveLength(
       1
     );
+  });
+
+  it('mixes an optional original sound without extending narration or captions', async () => {
+    const doc = document();
+    doc.scenes[0].soundEffect = 'chime';
+    const video = await service.render('org-a', doc, { format: 'square' });
+    expect(video.durationSeconds).toBeGreaterThan(1.1);
+    expect(video.durationSeconds).toBeLessThan(1.3);
+    expect(video.subtitles).toContain('Uma revisão antes da obra.');
   });
 
   it('rejects assets from another organization before rendering', async () => {
@@ -215,7 +331,12 @@ describe('Studio production with real FFmpeg and recorded audio', () => {
       [{ scene: doc.scenes[0], seconds: 300 }],
       'vertical'
     );
-    const captionText = result.srt.split('\n').filter((line: string) => line && !/^\d+$/.test(line) && !line.includes('-->')).join(' ');
+    const captionText = result.srt
+      .split('\n')
+      .filter(
+        (line: string) => line && !/^\d+$/.test(line) && !line.includes('-->')
+      )
+      .join(' ');
     expect(captionText).toContain('FINAL VISÍVEL');
   });
 
@@ -231,5 +352,22 @@ describe('Studio production with real FFmpeg and recorded audio', () => {
     expect(result.durationSeconds).toBeGreaterThan(1);
     expect(result.meanFirstFrameColor).toMatch(/^#[a-f0-9]{6}$/);
     expect(result.limitations).toContain('aproximação');
+    const inspected = await service.inspectForDistribution(
+      'org-a',
+      doc,
+      rendered.id
+    );
+    expect([inspected.width, inspected.height]).toEqual([1080, 1080]);
+    expect(inspected.durationSeconds).toBeGreaterThan(1);
+    expect(inspected.sha256).toMatch(/^[a-f0-9]{64}$/);
+    const repeat = await service.inspectForDistribution(
+      'org-a',
+      doc,
+      rendered.id
+    );
+    expect(repeat.sha256).toBe(inspected.sha256);
+    await expect(
+      service.inspectForDistribution('org-b', doc, rendered.id)
+    ).rejects.toThrow('organização');
   });
 });

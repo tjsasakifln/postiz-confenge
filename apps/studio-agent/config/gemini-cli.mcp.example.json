@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "confenge_studio": {
+      "command": "node",
+      "args": [
+        "--env-file=/ABS/PRIVATE/studio-agent.env",
+        "/ABS/PATH/postiz-confenge/apps/studio-agent/dist/main.js"
+      ],
+      "timeout": 180000,
+      "trust": false
+    }
+  }
+}

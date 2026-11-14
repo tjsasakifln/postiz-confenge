@@ -11,10 +11,16 @@ import { CodesService } from '@gitroom/nestjs-libraries/services/codes.service';
 import { PublicIntegrationsController } from '@gitroom/backend/public-api/routes/v1/public.integrations.controller';
 import { PublicAuthMiddleware } from '@gitroom/backend/services/auth/public.auth.middleware';
 import { SuperAdminGuard } from '@gitroom/backend/services/auth/super.admin.guard';
+import { PublicStudioController } from './routes/v1/public.studio.controller';
+import { PublicStudioService } from '@gitroom/nestjs-libraries/studio/agent/public.studio.service';
+import { StudioAudienceModule } from '@gitroom/nestjs-libraries/studio/audience/studio.audience.module';
 
-const authenticatedController = [PublicIntegrationsController];
+const authenticatedController = [
+  PublicIntegrationsController,
+  PublicStudioController,
+];
 @Module({
-  imports: [UploadModule],
+  imports: [UploadModule, StudioAudienceModule],
   controllers: process.env.MCP_ONLY ? [] : [...authenticatedController],
   providers: [
     AuthService,
@@ -26,6 +32,7 @@ const authenticatedController = [PublicIntegrationsController];
     CodesService,
     IntegrationManager,
     SuperAdminGuard,
+    PublicStudioService,
   ],
   get exports() {
     return [...this.imports, ...this.providers];
@@ -36,4 +43,3 @@ export class PublicApiModule implements NestModule {
     consumer.apply(PublicAuthMiddleware).forRoutes(...authenticatedController);
   }
 }
-

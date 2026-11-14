@@ -7,12 +7,18 @@ import type {
   StudioCapabilities,
   StudioProject,
   StudioRender,
+  StudioProductionCapabilities,
 } from '@gitroom/helpers/studio/studio.types';
 import type {
   StudioAudienceCapabilities,
   StudioAudienceMetrics,
   StudioAudienceThreadsResponse,
 } from '@gitroom/helpers/studio/studio.audience.types';
+import type {
+  StudioDistributionBatch,
+  StudioDistributionCapabilities,
+  StudioDistributionInventory,
+} from '@gitroom/helpers/studio/studio.distribution.types';
 
 export class StudioRequestError extends Error {
   constructor(message: string, readonly status: number) {
@@ -90,6 +96,15 @@ export const useStudioProjects = () => {
   );
 };
 
+export const useStudioProductionCapabilities = (projectId: string) => {
+  const request = useStudioRequest();
+  return useSWR<StudioProductionCapabilities, StudioRequestError>(
+    `/studio/projects/${encodeURIComponent(projectId)}/production-capabilities`,
+    request,
+    { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
+};
+
 export const useStudioProject = (id: string | null) => {
   const request = useStudioRequest();
   return useSWR<StudioProject, StudioRequestError>(
@@ -152,5 +167,38 @@ export const useStudioAudienceMetrics = (projectId: string, days: number) => {
     )}/audience/metrics?days=${days}`,
     request,
     { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
+};
+
+export const useStudioDistributionCapabilities = () => {
+  const request = useStudioRequest();
+  return useSWR<StudioDistributionCapabilities, StudioRequestError>(
+    '/studio/distribution/capabilities',
+    request,
+    { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
+};
+
+export const useStudioDistributionInventory = () => {
+  const request = useStudioRequest();
+  return useSWR<StudioDistributionInventory, StudioRequestError>(
+    '/studio/distribution/inventory',
+    request,
+    { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
+};
+
+export const useStudioDistributionBatch = (id: string | null) => {
+  const request = useStudioRequest();
+  return useSWR<StudioDistributionBatch, StudioRequestError>(
+    id ? `/studio/distribution/batches/${encodeURIComponent(id)}` : null,
+    request,
+    {
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+      refreshInterval: (data) =>
+        data && ['confirmed', 'running'].includes(data.state) ? 10000 : 0,
+      refreshWhenHidden: false,
+    }
   );
 };

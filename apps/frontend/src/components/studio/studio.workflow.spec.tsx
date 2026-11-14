@@ -217,6 +217,67 @@ describe('Revisão humana e versões do conteúdo', () => {
       ).disabled
     ).toBe(true);
   });
+
+  it('keeps the original target revision when another session updates it during a model copy', async () => {
+    const current = project();
+    const source = project();
+    source.id = 'source-model';
+    source.title = 'Modelo de teste';
+    source.approvals.identity = {
+      stage: 'identity',
+      hash: 'source-approved',
+      revision: 1,
+      approvedAt: source.updatedAt,
+      approvedBy: 'reviewer',
+    };
+    let resolveSource!: (value: StudioProject) => void;
+    request.mockImplementationOnce(
+      () =>
+        new Promise<StudioProject>((resolve) => {
+          resolveSource = resolve;
+        })
+    );
+    request.mockRejectedValueOnce(
+      new Error('Outra sessão alterou o conteúdo.')
+    );
+    const props = {
+      capabilities,
+      templates: [source],
+      onUpdated: async () => {},
+      onDirtyChange: () => {},
+      onRefresh: async () => current,
+    };
+    const view = render(<StudioProjectEditor project={current} {...props} />);
+    fireEvent.change(
+      screen.getByLabelText('Identidade aprovada para reutilizar'),
+      { target: { value: source.id } }
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Copiar modelo para este conteúdo' })
+    );
+    view.rerender(
+      <StudioProjectEditor
+        project={{ ...current, revision: 2, title: 'Alterado em outra sessão' }}
+        {...props}
+      />
+    );
+    resolveSource(source);
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole('button', {
+            name: 'Salvar alterações',
+          }) as HTMLButtonElement
+        ).disabled
+      ).toBe(false)
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+    await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(request.mock.calls[1][1].body).revision).toBe(1);
+    expect(
+      screen.getByText(/Outra sessão salvou uma nova versão/)
+    ).toBeTruthy();
+  });
 });
 
 describe('Publicação e resultado comercial', () => {

@@ -12,14 +12,24 @@ import type {
 } from '@gitroom/helpers/studio/studio.types';
 import { StudioProduction } from './studio.production';
 
-const { request, uploader, picker } = vi.hoisted(() => ({
-  request: vi.fn(),
-  uploader: { on: vi.fn(), off: vi.fn(), destroy: vi.fn(), addFile: vi.fn() },
-  picker: vi.fn(),
-}));
+const { request, uploader, picker, productionCapabilities } = vi.hoisted(
+  () => ({
+    request: vi.fn(),
+    uploader: { on: vi.fn(), off: vi.fn(), destroy: vi.fn(), addFile: vi.fn() },
+    picker: vi.fn(),
+    productionCapabilities: {
+      available: true,
+      localVoice: true,
+      openaiVoice: true,
+      images: true,
+      reason: 'Capacidades de teste.',
+    },
+  })
+);
 vi.mock('./studio.hooks', () => ({
   useStudioRequest: () => request,
   useStudioRenderJob: () => ({ data: { status: 'pending' }, mutate: vi.fn() }),
+  useStudioProductionCapabilities: () => ({ data: productionCapabilities }),
 }));
 vi.mock('@gitroom/frontend/components/media/media.component', () => ({
   showMediaBox: picker,
@@ -88,6 +98,8 @@ beforeEach(() => {
   request.mockReset();
   picker.mockReset();
   localStorage.clear();
+  productionCapabilities.localVoice = true;
+  productionCapabilities.openaiVoice = true;
 });
 afterEach(cleanup);
 
@@ -116,6 +128,7 @@ describe('Produção com arquivos e trabalhos reais', () => {
       revision: 4,
       format: 'vertical',
       voice: 'nova',
+      language: 'pt-BR',
       attempt: 0,
     });
     await waitFor(() =>
@@ -124,6 +137,84 @@ describe('Produção com arquivos e trabalhos reais', () => {
       ).toBe('["job-test"]')
     );
     expect(screen.getByText(/Vídeo em produção/)).toBeTruthy();
+  });
+
+  it('blocks missing recordings without falling back to a paid or local voice', () => {
+    const current = project();
+    current.document.identity.narration = { provider: 'recorded' };
+    render(
+      <StudioProduction
+        project={current}
+        document={current.document}
+        onChange={() => {}}
+        capabilities={capabilities}
+        blocked={false}
+        pending={null}
+        onProjectAction={async () => {}}
+      />
+    );
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Produzir vídeo',
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(true);
+    expect(
+      screen.getByText(/Adicione um áudio a cada cena selecionada/)
+    ).toBeTruthy();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('uses explicitly configured local narration and language when the server supports it', async () => {
+    const current = project();
+    current.document.identity.narration = { provider: 'local' };
+    current.document.identity.language = 'es';
+    productionCapabilities.openaiVoice = false;
+    request.mockResolvedValueOnce({ jobId: 'local-job' });
+    render(
+      <StudioProduction
+        project={current}
+        document={current.document}
+        onChange={() => {}}
+        capabilities={capabilities}
+        blocked={false}
+        pending={null}
+        onProjectAction={async () => {}}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Produzir vídeo' }));
+    await waitFor(() => expect(request).toHaveBeenCalledOnce());
+    expect(JSON.parse(request.mock.calls[0][1].body)).toMatchObject({
+      voice: 'local',
+      language: 'es',
+    });
+  });
+
+  it('checks local voice availability and does not silently switch providers', () => {
+    const current = project();
+    current.document.identity.narration = { provider: 'local' };
+    productionCapabilities.localVoice = false;
+    render(
+      <StudioProduction
+        project={current}
+        document={current.document}
+        onChange={() => {}}
+        capabilities={capabilities}
+        blocked={false}
+        pending={null}
+        onProjectAction={async () => {}}
+      />
+    );
+    expect(
+      (
+        screen.getByRole('button', {
+          name: 'Produzir vídeo',
+        }) as HTMLButtonElement
+      ).disabled
+    ).toBe(true);
+    expect(screen.getByText(/A voz local não está disponível/)).toBeTruthy();
+    expect(request).not.toHaveBeenCalled();
   });
 
   it('requires an explicit rights choice before attaching a picked library asset', () => {

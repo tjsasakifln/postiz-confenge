@@ -28,6 +28,8 @@ import {
 import { StudioProduction } from './studio.production';
 import { StudioPublicationEditor, StudioOutcomes } from './studio.delivery';
 import { StudioAudience } from './studio.audience';
+import { StudioIdentitySettings } from './studio.identity';
+import { StudioDistribution } from './studio.distribution';
 
 const steps = [
   { id: 'identity', label: 'Identidade' },
@@ -179,12 +181,14 @@ export const StudioProjectEditor = ({
   onUpdated,
   onDirtyChange,
   onRefresh,
+  templates,
 }: {
   project: StudioProject;
   capabilities?: StudioCapabilities;
   onUpdated: (project: StudioProject) => Promise<void>;
   onDirtyChange: (dirty: boolean) => void;
   onRefresh: () => Promise<StudioProject | undefined>;
+  templates?: StudioProject[];
 }) => {
   const request = useStudioRequest();
   const [baseline, setBaseline] = useState(project);
@@ -194,13 +198,16 @@ export const StudioProjectEditor = ({
   const [step, setStep] = useState<(typeof steps)[number]['id']>('identity');
   const [pending, setPending] = useState<string | null>(null);
   const [childBusy, setChildBusy] = useState(false);
+  const [publicationMode, setPublicationMode] = useState<
+    'drafts' | 'distribution'
+  >('drafts');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const operation = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const baseUrl = `/studio/projects/${encodeURIComponent(project.id)}`;
 
-  if (!dirty && !pending && baseline !== project) {
+  if (!dirty && !pending && !childBusy && baseline !== project) {
     setBaseline(project);
     setDocument(project.document);
     setTitle(project.title);
@@ -443,6 +450,14 @@ export const StudioProjectEditor = ({
                 required
               />
             </StudioSection>
+            <StudioIdentitySettings
+              projectId={project.id}
+              document={document}
+              onChange={edit}
+              templates={templates}
+              capabilities={capabilities}
+              onBusyChange={setChildBusy}
+            />
             <StudioIdentityEditor
               document={document}
               onChange={edit}
@@ -529,19 +544,50 @@ export const StudioProjectEditor = ({
           </>
         )}
         {step === 'publication' && (
-          <StudioPublicationEditor
-            project={baseline}
-            capabilities={capabilities}
-            blocked={locked}
-            pending={pending === 'drafts'}
-            onCreate={(targets) =>
-              void perform(
-                'drafts',
-                { targets },
-                'Solicitação conferida. Veja o estado de cada rascunho abaixo e abra o calendário para revisar os que já foram criados.'
-              )
-            }
-          />
+          <>
+            <div
+              className="flex flex-wrap gap-3"
+              role="group"
+              aria-label="Forma de publicação"
+            >
+              <StudioButton
+                secondary={publicationMode !== 'drafts'}
+                aria-pressed={publicationMode === 'drafts'}
+                onClick={() => setPublicationMode('drafts')}
+              >
+                Rascunhos no calendário
+              </StudioButton>
+              <StudioButton
+                secondary={publicationMode !== 'distribution'}
+                aria-pressed={publicationMode === 'distribution'}
+                onClick={() => setPublicationMode('distribution')}
+              >
+                Grade YouTube e espelhamento
+              </StudioButton>
+            </div>
+            {publicationMode === 'distribution' ? (
+              <StudioDistribution
+                project={baseline}
+                projects={templates}
+                blocked={locked}
+                onBusyChange={setChildBusy}
+              />
+            ) : (
+              <StudioPublicationEditor
+                project={baseline}
+                capabilities={capabilities}
+                blocked={locked}
+                pending={pending === 'drafts'}
+                onCreate={(targets) =>
+                  void perform(
+                    'drafts',
+                    { targets },
+                    'Solicitação conferida. Veja o estado de cada rascunho abaixo e abra o calendário para revisar os que já foram criados.'
+                  )
+                }
+              />
+            )}
+          </>
         )}
       </fieldset>
       {step === 'audience' && (

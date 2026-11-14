@@ -1,3 +1,5 @@
+import type { StudioSoundEffect } from './studio.sound-effects';
+
 export type StudioPlatform = 'youtube' | 'instagram' | 'linkedin';
 export type StudioApprovalStage = 'identity' | 'script' | 'package';
 export type StudioGenerationStage =
@@ -6,6 +8,8 @@ export type StudioGenerationStage =
   | 'script'
   | 'package';
 export type StudioFormat = 'vertical' | 'horizontal' | 'square';
+export type StudioLanguage = 'pt-BR' | 'en' | 'es';
+export type StudioVoice = 'alloy' | 'nova' | 'onyx' | 'shimmer';
 export type StudioOutcomeStage =
   | 'lead'
   | 'qualified_lead'
@@ -22,6 +26,31 @@ export interface StudioIdentity {
   visualStyle: string;
   evidence: string[];
   hypotheses: string[];
+  /** Optional for documents created before structured editorial settings. */
+  language?: StudioLanguage;
+  narration?: {
+    provider: 'recorded' | 'openai' | 'local';
+    voice?: StudioVoice;
+  };
+  brandName?: string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  fontFamily?: 'sans' | 'serif' | 'mono';
+  channel?: { platform: StudioPlatform; integrationId?: string };
+  schedule?: StudioEditorialSchedule;
+  copiedFrom?: { projectId: string; revision: number; copiedAt: string };
+}
+
+export interface StudioScheduleSlot {
+  /** Sunday = 0, Saturday = 6. Times are local to the editorial schedule. */
+  dayOfWeek: number;
+  time: string;
+}
+
+export interface StudioEditorialSchedule {
+  timezone: string;
+  weeklyFrequency?: number;
+  slots: StudioScheduleSlot[];
 }
 
 export interface StudioSource {
@@ -43,6 +72,7 @@ export interface StudioScene {
   kind: 'card' | 'image' | 'video';
   mediaId?: string;
   audioMediaId?: string;
+  soundEffect?: StudioSoundEffect;
 }
 
 export interface StudioAsset {
@@ -131,6 +161,7 @@ export interface StudioPublication {
 
 export interface StudioOutcome {
   id: string;
+  externalId?: string;
   stage: StudioOutcomeStage;
   valueCents?: number;
   currency: string;
@@ -171,6 +202,14 @@ export interface StudioProject {
 
 export interface StudioCapability {
   available: boolean;
+  reason: string;
+}
+
+export interface StudioProductionCapabilities {
+  available: boolean;
+  localVoice: boolean;
+  openaiVoice: boolean;
+  images: boolean;
   reason: string;
 }
 

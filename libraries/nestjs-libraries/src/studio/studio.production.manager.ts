@@ -8,7 +8,10 @@ import {
 import { TemporalService } from 'nestjs-temporal-core';
 import { createHash } from 'node:crypto';
 import { StudioService } from '@gitroom/nestjs-libraries/database/prisma/studio/studio.service';
-import { StudioProductionService } from './studio.production.service';
+import {
+  StudioProductionService,
+  resolveStudioRenderOptions,
+} from './studio.production.service';
 import { StudioResearchService } from './studio.research.service';
 import {
   StudioImagesDto,
@@ -35,6 +38,7 @@ export class StudioProductionManager {
         JSON.stringify({
           visualStyle: document.identity.visualStyle,
           positioning: document.identity.positioning,
+          brand: document.identity,
           topic: document.topic,
           scenes: document.scenes.map((scene) => [
             scene.id,
@@ -44,6 +48,7 @@ export class StudioProductionManager {
             scene.kind,
             scene.mediaId,
             scene.audioMediaId,
+            scene.soundEffect,
           ]),
           music: document.backgroundMusicMediaId,
         })
@@ -63,6 +68,7 @@ export class StudioProductionManager {
   async start(orgId: string, projectId: string, body: StudioRenderDto) {
     const project = await this.project(orgId, projectId, body.revision);
     this.studio.requireApproval(project, 'script');
+    const options = resolveStudioRenderOptions(project.document, body);
     const capability = await this.production.capabilities();
     if (!capability.available)
       throw new ServiceUnavailableException(capability.reason);
@@ -77,7 +83,8 @@ export class StudioProductionManager {
           revision: body.revision,
           format: body.format,
           sceneIds: body.sceneIds || [],
-          voice: body.voice || 'nova',
+          voice: options.voice || 'nova',
+          language: options.language,
           maxDurationSeconds: body.maxDurationSeconds,
           attempt: body.attempt || 0,
         })
@@ -97,7 +104,7 @@ export class StudioProductionManager {
             scriptHash: project.approvals.script!.hash,
             productionHash: this.productionHash(project.document),
             document: project.document,
-            options: body,
+            options,
           },
         ],
       });
@@ -220,11 +227,13 @@ export class StudioProductionManager {
     actorId: string
   ) {
     const project = await this.project(orgId, projectId, body.revision);
-    if (body.kind !== 'brand') this.studio.requireApproval(project, 'script');
+    if (!['brand', 'brand-kit'].includes(body.kind))
+      this.studio.requireApproval(project, 'script');
     const images = await this.production.images(
       orgId,
       project.document,
-      body.kind
+      body.kind,
+      body
     );
     return this.studio.updateDocument(
       orgId,
@@ -234,6 +243,11 @@ export class StudioProductionManager {
       actorId,
       `${body.kind}_generated`
     );
+  }
+
+  async capabilities(orgId: string, projectId: string) {
+    await this.project(orgId, projectId);
+    return this.production.capabilities();
   }
 
   async search(
@@ -264,7 +278,7 @@ export class StudioProductionManager {
         editorialNotes: [
           ...(project.document.editorialNotes || []),
           `Pesquisa em ${result.observedAt}: ${result.note}`,
-          ...result.warnings.map(warning => `Consulta parcial: ${warning}`),
+          ...result.warnings.map((warning) => `Consulta parcial: ${warning}`),
         ].slice(-20),
       },
       actorId,

@@ -1,0 +1,3 @@
+dist/
+*.env
+!studio-agent.env.example

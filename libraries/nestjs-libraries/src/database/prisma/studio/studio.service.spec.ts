@@ -6,6 +6,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { StudioService } from './studio.service';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { StudioOutcomeDto } from '@gitroom/nestjs-libraries/dtos/studio/studio.dto';
 import type {
   StudioApprovalStage,
   StudioDocument,
@@ -551,6 +554,37 @@ describe('Studio: ownership, approvals and publication boundaries', () => {
         'user'
       )
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects explicit null values at the public DTO and requires a real amount for every financial stage', async () => {
+    const { service, repo } = fixture();
+    const base = {
+      stage: 'lead' as const,
+      currency: 'BRL',
+      reference: 'FORM-1',
+      note: '',
+      occurredAt: '2026-01-01T00:00:00Z',
+    };
+    expect(await validate(plainToInstance(StudioOutcomeDto, base))).toHaveLength(0);
+    for (const field of ['externalId', 'valueCents']) {
+      const errors = await validate(
+        plainToInstance(StudioOutcomeDto, { ...base, [field]: null })
+      );
+      expect(errors.map((error) => error.property)).toContain(field);
+    }
+    for (const stage of ['proposal', 'contract', 'invoiced', 'received'] as const) {
+      for (const valueCents of [null, undefined]) {
+        await expect(
+          service.outcome('org-a', 'project-a', { ...base, stage, valueCents } as any, 'user')
+        ).rejects.toBeInstanceOf(BadRequestException);
+      }
+    }
+    await expect(
+      service.outcome('org-a', 'project-a', { ...base, externalId: null } as any, 'user')
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repo.outcome).not.toHaveBeenCalled();
+    await service.outcome('org-a', 'project-a', { ...base, stage: 'proposal', valueCents: 0 }, 'user');
+    expect(repo.outcome).toHaveBeenCalledTimes(1);
   });
 
   it('never exposes stored provider errors or unsafe publication URLs on the studio endpoint', async () => {

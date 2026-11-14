@@ -302,55 +302,119 @@ export class StudioRepository {
     actorId: string,
     dto: StudioOutcomeDto
   ) {
-    return this._transaction.model.$transaction(async (tx) => {
-      const locked = await tx.studioProject.updateMany({
-        where: { id: projectId, organizationId: org },
-        data: { updatedAt: new Date() },
-      });
-      if (locked.count !== 1)
-        throw new NotFoundException('Projeto não encontrado.');
-      const project = await tx.studioProject.findFirstOrThrow({
-        where: { id: projectId, organizationId: org },
-        select: { id: true, revision: true },
-      });
-      const previous = await tx.studioOutcome.findFirst({
-        where: {
-          organizationId: org,
-          projectId,
-          stage: dto.stage,
-          reference: dto.reference,
-        },
-      });
-      if (previous) {
-        if (
-          previous.valueCents !== (dto.valueCents ?? null) ||
-          previous.currency !== dto.currency
-        ) {
-          throw new ConflictException(
-            'Esta referência já foi registrada nesta etapa com outro valor.'
-          );
-        }
-        return;
+    const assertSameExternalEvent = (previous: {
+      projectId: string;
+      stage: string;
+      reference: string;
+      valueCents: number | null;
+      currency: string;
+      note: string;
+      occurredAt: Date;
+    }) => {
+      if (
+        previous.projectId !== projectId ||
+        previous.stage !== dto.stage ||
+        previous.reference !== dto.reference ||
+        previous.valueCents !== (dto.valueCents ?? null) ||
+        previous.currency !== dto.currency ||
+        previous.note !== dto.note ||
+        previous.occurredAt.getTime() !== new Date(dto.occurredAt).getTime()
+      ) {
+        throw new ConflictException(
+          'O identificador externo já pertence a um evento diferente. Confira a origem antes de repetir.'
+        );
       }
-      const outcome = await tx.studioOutcome.create({
-        data: {
-          ...dto,
-          occurredAt: new Date(dto.occurredAt),
-          organizationId: org,
-          projectId,
-          recordedBy: actorId,
-        },
+    };
+    try {
+      return await this._transaction.model.$transaction(async (tx) => {
+        const locked = await tx.studioProject.updateMany({
+          where: { id: projectId, organizationId: org },
+          data: { updatedAt: new Date() },
+        });
+        if (locked.count !== 1)
+          throw new NotFoundException('Projeto não encontrado.');
+        const project = await tx.studioProject.findFirstOrThrow({
+          where: { id: projectId, organizationId: org },
+          select: { id: true, revision: true },
+        });
+        if (dto.externalId) {
+          const external = await tx.studioOutcome.findFirst({
+            where: { organizationId: org, externalId: dto.externalId },
+          });
+          if (external) {
+            assertSameExternalEvent(external);
+            return;
+          }
+        }
+        const previous = await tx.studioOutcome.findFirst({
+          where: {
+            organizationId: org,
+            projectId,
+            stage: dto.stage,
+            reference: dto.reference,
+          },
+        });
+        if (previous) {
+          if (dto.externalId) {
+            if (previous.externalId && previous.externalId !== dto.externalId)
+              throw new ConflictException(
+                'A referência já está vinculada a outro evento externo.'
+              );
+            assertSameExternalEvent(previous);
+            if (!previous.externalId)
+              await tx.studioOutcome.update({
+                where: { id: previous.id },
+                data: { externalId: dto.externalId },
+              });
+            return;
+          }
+          if (
+            previous.valueCents !== (dto.valueCents ?? null) ||
+            previous.currency !== dto.currency
+          ) {
+            throw new ConflictException(
+              'Esta referência já foi registrada nesta etapa com outro valor.'
+            );
+          }
+          return;
+        }
+        const outcome = await tx.studioOutcome.create({
+          data: {
+            ...dto,
+            occurredAt: new Date(dto.occurredAt),
+            organizationId: org,
+            projectId,
+            recordedBy: actorId,
+          },
+        });
+        await tx.studioEvent.create({
+          data: {
+            organizationId: org,
+            projectId,
+            revision: project.revision,
+            action: `outcome:${dto.stage}`,
+            actorId,
+            detail: {
+              outcomeId: outcome.id,
+              reference: outcome.reference,
+              externalId: dto.externalId || null,
+            },
+          },
+        });
       });
-      await tx.studioEvent.create({
-        data: {
-          organizationId: org,
-          projectId,
-          revision: project.revision,
-          action: `outcome:${dto.stage}`,
-          actorId,
-          detail: { outcomeId: outcome.id, reference: outcome.reference },
-        },
-      });
-    });
+    } catch (error) {
+      if (dto.externalId && (error as { code?: string }).code === 'P2002') {
+        const winner = await this._transaction.model.$transaction((tx) =>
+          tx.studioOutcome.findFirst({
+            where: { organizationId: org, externalId: dto.externalId },
+          })
+        );
+        if (winner) {
+          assertSameExternalEvent(winner);
+          return;
+        }
+      }
+      throw error;
+    }
   }
 }

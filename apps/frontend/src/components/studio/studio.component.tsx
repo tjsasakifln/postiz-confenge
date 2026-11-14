@@ -219,7 +219,7 @@ export const Studio = () => {
             hint={
               dirty
                 ? 'Salve ou descarte as alterações antes de trocar de conteúdo.'
-                : undefined
+                : 'Lista limitada aos 50 conteúdos mais recentes da organização.'
             }
           >
             <option value="">Selecione um conteúdo</option>
@@ -252,6 +252,7 @@ export const Studio = () => {
           key={selectedId}
           project={selected.data}
           capabilities={capabilities.data}
+          templates={projects.data}
           onUpdated={updated}
           onDirtyChange={setDirty}
           onRefresh={() => selected.mutate()}

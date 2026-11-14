@@ -38,7 +38,9 @@
     "docker-create": "./var/docker/docker-create.sh",
     "postinstall": "pnpm run prisma-generate",
     "test": "jest --coverage --detectOpenHandles --reporters=default --reporters=jest-junit",
-    "test:studio": "vitest run --config vitest.studio.config.mts"
+    "test:studio": "vitest run --config vitest.studio.config.mts",
+    "build:studio-agent": "pnpm --filter ./apps/studio-agent run build",
+    "test:studio-agent": "pnpm --filter ./apps/studio-agent run test"
   },
   "dependencies": {
     "@ag-ui/mastra": "^1.1.4",
@@ -316,7 +318,8 @@
     "typescript": "5.5.4",
     "vite": "^8.3.5",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "4.1.12"
+    "vitest": "4.1.12",
+    "@playwright/test": "1.58.2"
   },
   "volta": {
     "node": "20.17.0"

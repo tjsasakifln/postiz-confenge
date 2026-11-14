@@ -8,11 +8,13 @@ import { UploadFactory } from '@gitroom/nestjs-libraries/upload/upload.factory';
 import { ssrfSafeDispatcher } from '@gitroom/nestjs-libraries/dtos/webhooks/ssrf.safe.dispatcher';
 import type {
   StudioDocument,
+  StudioAsset,
   StudioFormat,
   StudioRender,
   StudioScene,
 } from '@gitroom/helpers/studio/studio.types';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises';
@@ -23,6 +25,12 @@ import { pipeline } from 'node:stream/promises';
 import sharp from 'sharp';
 import OpenAI from 'openai';
 import pLimit from 'p-limit';
+import {
+  studioBrand,
+  studioBrandImage,
+  studioFrameCover,
+} from './studio.visuals';
+import { writeStudioSound } from './studio.sound-effects';
 
 const execute = promisify(execFile);
 const dimensions: Record<StudioFormat, [number, number]> = {
@@ -55,27 +63,90 @@ const renderLimit = pLimit(2);
 export interface StudioRenderOptions {
   format: StudioFormat;
   sceneIds?: string[];
-  voice?: 'alloy' | 'nova' | 'onyx' | 'shimmer';
+  voice?: 'alloy' | 'nova' | 'onyx' | 'shimmer' | 'local';
+  language?: 'pt-BR' | 'en' | 'es';
   maxDurationSeconds?: number;
 }
+
+export function resolveStudioRenderOptions(
+  document: StudioDocument,
+  requested: StudioRenderOptions
+): StudioRenderOptions {
+  const narration = document.identity.narration;
+  const language = requested.language || document.identity.language || 'pt-BR';
+  if (
+    document.identity.language &&
+    requested.language &&
+    requested.language !== document.identity.language
+  )
+    throw new BadRequestException(
+      'O idioma difere da identidade aprovada. Atualize e revise a identidade antes de produzir.'
+    );
+  if (!narration) return { ...requested, language };
+  const expected =
+    narration.provider === 'local'
+      ? 'local'
+      : narration.provider === 'openai'
+      ? narration.voice || 'nova'
+      : undefined;
+  if (requested.voice !== undefined && requested.voice !== expected)
+    throw new BadRequestException(
+      'A voz difere da identidade aprovada. Atualize e revise a identidade antes de produzir.'
+    );
+  if (narration.provider === 'recorded') {
+    const scenes = requested.sceneIds?.length
+      ? requested.sceneIds.map((id) =>
+          document.scenes.find((scene) => scene.id === id)
+        )
+      : document.scenes;
+    if (!scenes.length || scenes.some((scene) => !scene?.audioMediaId))
+      throw new BadRequestException(
+        'A identidade exige áudio gravado em todas as cenas selecionadas.'
+      );
+  }
+  return { ...requested, voice: expected, language };
+}
+
+export interface StudioImageOptions {
+  mediaId?: string;
+  format?: 'vertical' | 'horizontal';
+  brandName?: string;
+  variant?: number;
+}
+type StudioGeneratedAsset = StudioAsset & { path: string; name: string };
 
 @Injectable()
 export class StudioProductionService {
   constructor(private readonly media: MediaRepository) {}
 
   async capabilities() {
+    let localVoice = false;
+    try {
+      await execute('espeak-ng', ['--version'], { timeout: 5000 });
+      localVoice = true;
+    } catch {
+      /* Voice is optional; recorded audio remains available. */
+    }
     try {
       await execute('ffmpeg', ['-version'], { timeout: 5000 });
       await execute('ffprobe', ['-version'], { timeout: 5000 });
       return {
         available: true,
+        localVoice,
+        openaiVoice: Boolean(process.env.OPENAI_API_KEY),
+        images: true,
         reason: process.env.OPENAI_API_KEY
           ? 'FFmpeg e narração configurados. Cada geração usa a conta do provedor.'
-          : 'FFmpeg disponível. Use áudio gravado ou configure OPENAI_API_KEY para narração.',
+          : localVoice
+          ? 'FFmpeg e voz local disponíveis. Voz local funciona sem cobrança de API; confira sua qualidade antes de publicar.'
+          : 'FFmpeg disponível. Use áudio gravado, instale espeak-ng para voz local ou configure OPENAI_API_KEY para narração.',
       };
     } catch {
       return {
         available: false,
+        localVoice,
+        openaiVoice: Boolean(process.env.OPENAI_API_KEY),
+        images: true,
         reason: 'Instale FFmpeg e ffprobe no servidor de produção de mídia.',
       };
     }
@@ -281,7 +352,8 @@ export class StudioProductionService {
     format: StudioFormat,
     variant = 0,
     footer = '',
-    visualStyle = ''
+    visualStyle = '',
+    fontFamily = 'DejaVu Sans'
   ) {
     const [width, height] = dimensions[format];
     const palette = visualStyle.match(/#[a-fA-F0-9]{6}\b/g) || [
@@ -298,7 +370,9 @@ export class StudioProductionService {
     );
     const titleStart = Math.round(height * 0.25);
     const bodyStart = titleStart + titleLines.length * 86 + 70;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#132128"/><rect x="72" y="100" width="100" height="10" fill="${color}"/><g fill="#fff" font-family="DejaVu Sans, sans-serif"><text x="72" y="165" font-size="25" letter-spacing="4">${xml(
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#132128"/><rect x="72" y="100" width="100" height="10" fill="${color}"/><g fill="#fff" font-family="${xml(
+      fontFamily
+    )}, sans-serif"><text x="72" y="165" font-size="25" letter-spacing="4">${xml(
       footer.slice(0, 48)
     )}</text>${titleLines
       .map(
@@ -388,8 +462,10 @@ export class StudioProductionService {
     document: StudioDocument,
     options: StudioRenderOptions
   ): Promise<StudioRender> {
+    options = resolveStudioRenderOptions(document, options);
     return renderLimit(async () => {
-      if (!(await this.capabilities()).available)
+      const capability = await this.capabilities();
+      if (!capability.available)
         throw new ServiceUnavailableException(
           'FFmpeg não está instalado no servidor de produção.'
         );
@@ -411,8 +487,14 @@ export class StudioProductionService {
       const scenes = selected as StudioScene[];
       if (scenes.some((scene) => !scene.narration.trim()))
         throw new BadRequestException('Cada cena precisa de narração.');
+      const needsSpeech = scenes.some((scene) => !scene.audioMediaId);
+      if (needsSpeech && options.voice === 'local' && !capability.localVoice)
+        throw new ServiceUnavailableException(
+          'Instale espeak-ng no worker para usar a voz local.'
+        );
       if (
         scenes.some((scene) => !scene.audioMediaId) &&
+        options.voice !== 'local' &&
         !process.env.OPENAI_API_KEY
       )
         throw new ServiceUnavailableException(
@@ -436,6 +518,11 @@ export class StudioProductionService {
       try {
         // Validate and stage all supplied assets before spending on any speech request.
         for (const [index, scene] of scenes.entries()) {
+          if (scene.soundEffect)
+            await writeStudioSound(
+              scene.soundEffect,
+              join(dir, `effect-${index}.wav`)
+            );
           if (scene.audioMediaId)
             await this.material(
               orgId,
@@ -467,8 +554,41 @@ export class StudioProductionService {
             'audio'
           );
         for (const [index, scene] of scenes.entries()) {
-          const audio = join(dir, `audio-${index}`);
-          if (!scene.audioMediaId) {
+          let audio = join(dir, `audio-${index}`);
+          if (!scene.audioMediaId && options.voice === 'local') {
+            const language =
+              options.language || document.identity.language || 'pt-BR';
+            const voice = { 'pt-BR': 'pt-br', en: 'en', es: 'es' }[language];
+            if (!voice)
+              throw new BadRequestException('Idioma de narração inválido.');
+            await writeFile(
+              join(dir, 'speech.txt'),
+              scene.pronunciation || scene.narration,
+              'utf8'
+            );
+            try {
+              await execute(
+                'espeak-ng',
+                [
+                  '-v',
+                  voice,
+                  '-b',
+                  '1',
+                  '-s',
+                  '165',
+                  '-f',
+                  join(dir, 'speech.txt'),
+                  '-w',
+                  audio,
+                ],
+                { cwd: dir, timeout: 120000, maxBuffer: 1024 * 1024 }
+              );
+            } catch {
+              throw new ServiceUnavailableException(
+                'A voz local falhou. Confira espeak-ng e o idioma no worker.'
+              );
+            }
+          } else if (!scene.audioMediaId) {
             try {
               const response = await new OpenAI({
                 apiKey: process.env.OPENAI_API_KEY,
@@ -488,6 +608,26 @@ export class StudioProductionService {
             }
           }
           const seconds = await this.duration(audio);
+          if (scene.soundEffect) {
+            const mixed = join(dir, `mixed-${index}.wav`);
+            await this.run(
+              [
+                '-i',
+                audio,
+                '-i',
+                join(dir, `effect-${index}.wav`),
+                '-filter_complex',
+                '[1:a]volume=0.35[s];[0:a][s]amix=inputs=2:duration=first:normalize=0[m]',
+                '-map',
+                '[m]',
+                '-c:a',
+                'pcm_s16le',
+                mixed,
+              ],
+              dir
+            );
+            audio = mixed;
+          }
           if (
             completed.reduce((sum, value) => sum + value.seconds, 0) + seconds >
             900
@@ -507,7 +647,10 @@ export class StudioProductionService {
               options.format,
               0,
               document.identity.positioning,
-              document.identity.visualStyle
+              `${studioBrand(document).primary} ${
+                studioBrand(document).secondary
+              } ${document.identity.visualStyle}`,
+              studioBrand(document).font
             );
           const filter = `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=0x132128,setsar=1,fps=25,format=yuv420p`;
           await this.run(
@@ -637,17 +780,19 @@ export class StudioProductionService {
   async images(
     orgId: string,
     document: StudioDocument,
-    kind: 'thumbnails' | 'carousel' | 'brand'
-  ) {
+    kind: 'thumbnails' | 'carousel' | 'brand' | 'frame-covers' | 'brand-kit',
+    options: StudioImageOptions = {}
+  ): Promise<StudioGeneratedAsset[]> {
+    if (kind === 'frame-covers')
+      return this.frameCovers(orgId, document, options);
+    if (kind === 'brand-kit') return this.brandKit(orgId, document, options);
     const cards =
       kind === 'carousel'
-        ? document.scenes
-            .slice(0, 10)
-            .map((scene) => ({
-              title: scene.visual || document.topic,
-              body: scene.narration,
-              format: 'square' as StudioFormat,
-            }))
+        ? document.scenes.slice(0, 10).map((scene) => ({
+            title: scene.visual || document.topic,
+            body: scene.narration,
+            format: 'square' as StudioFormat,
+          }))
         : Array.from({ length: 3 }, (_, i) => ({
             title:
               kind === 'brand'
@@ -677,7 +822,10 @@ export class StudioProductionService {
           kind === 'brand'
             ? 'PROPOSTA DE IDENTIDADE'
             : document.identity.positioning,
-          document.identity.visualStyle
+          `${studioBrand(document).primary} ${
+            studioBrand(document).secondary
+          } ${document.identity.visualStyle}`,
+          studioBrand(document).font
         );
         const saved = await this.save(
           orgId,
@@ -696,6 +844,182 @@ export class StudioProductionService {
         });
       }
       return result;
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  private async brandKit(
+    orgId: string,
+    document: StudioDocument,
+    options: StudioImageOptions
+  ): Promise<StudioGeneratedAsset[]> {
+    const name = (options.brandName || studioBrand(document).name).trim();
+    if (!name || name.length > 80)
+      throw new BadRequestException(
+        'Informe o nome da marca com até oitenta caracteres.'
+      );
+    const variant = options.variant || 0;
+    if (![0, 1, 2].includes(variant))
+      throw new BadRequestException('Escolha uma das três direções de marca.');
+    const dir = await mkdtemp(join(tmpdir(), 'postiz-studio-brand-'));
+    try {
+      const result = [];
+      for (const role of ['logo', 'avatar', 'banner', 'watermark'] as const) {
+        const path = join(dir, `${role}.png`);
+        await studioBrandImage(document, name, role, variant, path);
+        const saved = await this.save(
+          orgId,
+          path,
+          'image',
+          `${role}-${variant + 1}.png`
+        );
+        result.push({
+          id: saved.id,
+          path: saved.path,
+          name: saved.name,
+          kind: 'image' as const,
+          license: 'owned' as const,
+          attribution: `Composição geométrica própria para ${name}. Revise a identidade; não houve pesquisa de exclusividade de marca. Banner: 2560x1440, texto em área central conservadora de 1235x338. O envio às redes é uma ação posterior.`,
+        });
+      }
+      return result;
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  private async frameCovers(
+    orgId: string,
+    document: StudioDocument,
+    options: StudioImageOptions
+  ): Promise<StudioGeneratedAsset[]> {
+    if (!options.mediaId)
+      throw new BadRequestException('Selecione o vídeo de origem das capas.');
+    const format = options.format || 'vertical';
+    if (!['vertical', 'horizontal'].includes(format))
+      throw new BadRequestException('Formato de capa inválido.');
+    const dir = await mkdtemp(join(tmpdir(), 'postiz-studio-covers-'));
+    try {
+      const source = await this.material(
+        orgId,
+        document,
+        options.mediaId,
+        join(dir, 'reference'),
+        'video'
+      );
+      const duration = await this.duration(source);
+      const asset = document.media.find((item) => item.id === options.mediaId)!;
+      const pkg = document.packages.find(
+        (item) =>
+          item.platform === (format === 'vertical' ? 'instagram' : 'youtube')
+      );
+      const result = [];
+      for (const [index, fraction] of [0.2, 0.5, 0.8].entries()) {
+        const timestamp = Math.min(duration - 0.04, duration * fraction);
+        const frame = join(dir, `frame-${index}.png`);
+        const destination = join(dir, `cover-${index}.png`);
+        await this.run(
+          [
+            '-ss',
+            String(Math.max(0, timestamp)),
+            '-i',
+            source,
+            '-frames:v',
+            '1',
+            frame,
+          ],
+          dir
+        );
+        await studioFrameCover(
+          frame,
+          destination,
+          document,
+          pkg?.thumbnailOptions?.[index] || pkg?.title || document.topic,
+          format
+        );
+        const saved = await this.save(
+          orgId,
+          destination,
+          'image',
+          `capa-${format}-${index + 1}.png`
+        );
+        result.push({
+          id: saved.id,
+          path: saved.path,
+          name: saved.name,
+          kind: 'image' as const,
+          license: asset.license,
+          ...(asset.sourceUrl ? { sourceUrl: asset.sourceUrl } : {}),
+          attribution: `Composição a partir da mídia ${
+            options.mediaId
+          }, quadro em ${timestamp.toFixed(2)} segundos. ${
+            asset.attribution || ''
+          }`,
+        });
+      }
+      return result;
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }
+
+  async inspectForDistribution(
+    orgId: string,
+    document: StudioDocument,
+    mediaId: string
+  ) {
+    const dir = await mkdtemp(join(tmpdir(), 'postiz-studio-inspect-'));
+    try {
+      const source = await this.material(
+        orgId,
+        document,
+        mediaId,
+        join(dir, 'video'),
+        'video'
+      );
+      const { stdout } = await execute(
+        'ffprobe',
+        [
+          '-v',
+          'error',
+          ...safeInputs,
+          '-select_streams',
+          'v:0',
+          '-show_entries',
+          'format=duration:stream=width,height',
+          '-of',
+          'json',
+          source,
+        ],
+        { timeout: 30000, maxBuffer: 1024 * 1024 }
+      );
+      const info = JSON.parse(stdout);
+      const durationSeconds = Number(info.format?.duration);
+      const width = Number(info.streams?.[0]?.width);
+      const height = Number(info.streams?.[0]?.height);
+      if (
+        !Number.isFinite(durationSeconds) ||
+        durationSeconds <= 0 ||
+        durationSeconds > 900 ||
+        !Number.isSafeInteger(width) ||
+        !Number.isSafeInteger(height) ||
+        width <= 0 ||
+        height <= 0 ||
+        width > 16384 ||
+        height > 16384
+      )
+        throw new BadRequestException(
+          'Confira duração e dimensões do vídeo antes de distribuir.'
+        );
+      const digest = createHash('sha256');
+      for await (const chunk of createReadStream(source)) digest.update(chunk);
+      return { durationSeconds, width, height, sha256: digest.digest('hex') };
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException(
+        'Não foi possível conferir o vídeo para distribuição.'
+      );
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -11,6 +11,7 @@ import {
 import { GetPostsDto } from '@gitroom/nestjs-libraries/dtos/posts/get.posts.dto';
 import { GetPostsListDto } from '@gitroom/nestjs-libraries/dtos/posts/get.posts.list.dto';
 import dayjs from 'dayjs';
+import { countStudioDistributionReservations } from '../studio/studio.distribution.count';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import weekOfYear from 'dayjs/plugin/weekOfYear';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
@@ -30,7 +31,7 @@ dayjs.extend(utc);
 @Injectable()
 export class PostsRepository {
   constructor(
-    private _post: PrismaRepository<'post'>,
+    private _post: PrismaRepository<'post' | 'studioDistributionItem'>,
     private _popularPosts: PrismaRepository<'popularPosts'>,
     private _comments: PrismaRepository<'comments'>,
     private _tags: PrismaRepository<'tags'>,
@@ -632,8 +633,8 @@ export class PostsRepository {
     });
   }
 
-  countPostsFromDay(orgId: string, date: Date) {
-    return this._post.model.post.count({
+  async countPostsFromDay(orgId: string, date: Date) {
+    const count = await this._post.model.post.count({
       where: {
         organizationId: orgId,
         publishDate: {
@@ -652,6 +653,7 @@ export class PostsRepository {
         ],
       },
     });
+    return count + await countStudioDistributionReservations(this._post.model, orgId, date);
   }
 
   countPostsOfOtherOrganizations(orgId: string, ids: string[]) {

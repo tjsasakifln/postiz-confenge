@@ -1,7 +1,12 @@
 import { Type } from 'class-transformer';
 import {
+  STUDIO_SOUND_EFFECTS,
+  type StudioSoundEffect,
+} from '@gitroom/helpers/studio/studio.sound-effects';
+import {
   ArrayMaxSize,
   ArrayMinSize,
+  ArrayUnique,
   Equals,
   IsArray,
   IsDateString,
@@ -12,10 +17,13 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  IsTimeZone,
+  Matches,
   Max,
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import type {
@@ -24,7 +32,50 @@ import type {
   StudioGenerationStage,
   StudioOutcomeStage,
   StudioPlatform,
+  StudioLanguage,
+  StudioVoice,
 } from '@gitroom/helpers/studio/studio.types';
+
+export class StudioNarrationDto {
+  @IsIn(['recorded', 'openai', 'local']) provider:
+    | 'recorded'
+    | 'openai'
+    | 'local';
+  @IsOptional() @IsIn(['alloy', 'nova', 'onyx', 'shimmer']) voice?: StudioVoice;
+}
+
+export class StudioIdentityChannelDto {
+  @IsIn(['youtube', 'instagram', 'linkedin']) platform: StudioPlatform;
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  integrationId?: string;
+}
+
+export class StudioScheduleSlotDto {
+  @IsInt() @Min(0) @Max(6) dayOfWeek: number;
+  @Matches(/^(?:[01]\d|2[0-3]):[0-5]\d$/) time: string;
+}
+
+export class StudioEditorialScheduleDto {
+  @IsTimeZone() @MaxLength(100) timezone: string;
+  @IsOptional() @IsInt() @Min(1) @Max(70) weeklyFrequency?: number;
+  @IsArray()
+  @ArrayMaxSize(70)
+  @ArrayUnique(
+    (slot: StudioScheduleSlotDto) => `${slot.dayOfWeek}:${slot.time}`
+  )
+  @Type(() => StudioScheduleSlotDto)
+  @ValidateNested({ each: true })
+  slots: StudioScheduleSlotDto[];
+}
+
+export class StudioIdentitySourceDto {
+  @IsString() @MinLength(1) @MaxLength(100) projectId: string;
+  @IsInt() @Min(1) revision: number;
+  @IsDateString() copiedAt: string;
+}
 
 export class StudioIdentityDto {
   @IsString() @MaxLength(4000) audience: string;
@@ -41,6 +92,30 @@ export class StudioIdentityDto {
   @IsString({ each: true })
   @MaxLength(2000, { each: true })
   hypotheses: string[];
+  @IsOptional() @IsIn(['pt-BR', 'en', 'es']) language?: StudioLanguage;
+  @IsOptional()
+  @Type(() => StudioNarrationDto)
+  @ValidateNested()
+  narration?: StudioNarrationDto;
+  @IsOptional() @IsString() @MaxLength(80) brandName?: string;
+  @IsOptional() @Matches(/^#[\da-fA-F]{6}$/) primaryColor?: string;
+  @IsOptional() @Matches(/^#[\da-fA-F]{6}$/) secondaryColor?: string;
+  @IsOptional() @IsIn(['sans', 'serif', 'mono']) fontFamily?:
+    | 'sans'
+    | 'serif'
+    | 'mono';
+  @IsOptional()
+  @Type(() => StudioIdentityChannelDto)
+  @ValidateNested()
+  channel?: StudioIdentityChannelDto;
+  @IsOptional()
+  @Type(() => StudioEditorialScheduleDto)
+  @ValidateNested()
+  schedule?: StudioEditorialScheduleDto;
+  @IsOptional()
+  @Type(() => StudioIdentitySourceDto)
+  @ValidateNested()
+  copiedFrom?: StudioIdentitySourceDto;
 }
 
 export class StudioSourceDto {
@@ -68,6 +143,9 @@ export class StudioSceneDto {
   @IsIn(['card', 'image', 'video']) kind: 'card' | 'image' | 'video';
   @IsOptional() @IsString() @MinLength(1) @MaxLength(100) mediaId?: string;
   @IsOptional() @IsString() @MinLength(1) @MaxLength(100) audioMediaId?: string;
+  @IsOptional()
+  @IsIn(STUDIO_SOUND_EFFECTS.map((effect) => effect.id))
+  soundEffect?: StudioSoundEffect;
 }
 
 export class StudioAssetDto {
@@ -260,6 +338,8 @@ export class StudioDraftDto extends StudioRevisionDto {
 }
 
 export class StudioOutcomeDto {
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString() @MinLength(1) @MaxLength(150) externalId?: string;
   @IsIn([
     'lead',
     'qualified_lead',
@@ -270,7 +350,8 @@ export class StudioOutcomeDto {
     'received',
   ])
   stage: StudioOutcomeStage;
-  @IsOptional() @IsInt() @Min(0) @Max(2147483647) valueCents?: number;
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsInt() @Min(0) @Max(2147483647) valueCents?: number;
   @IsIn(['BRL']) currency: string;
   @IsString() @MinLength(1) @MaxLength(300) reference: string;
   @IsString() @MaxLength(3000) note: string;

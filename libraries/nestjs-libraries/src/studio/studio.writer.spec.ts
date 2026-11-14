@@ -41,6 +41,59 @@ afterEach(() => {
 });
 
 describe('Studio writer evidence and deterministic editorial scores', () => {
+  it('uses the selected language and preserves operator settings when generating identity text', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
+    const original = document();
+    original.identity = {
+      ...original.identity,
+      language: 'en',
+      narration: { provider: 'recorded' },
+      brandName: 'Approved brand',
+      primaryColor: '#123456',
+      fontFamily: 'sans',
+      schedule: {
+        timezone: 'America/Sao_Paulo',
+        slots: [{ dayOfWeek: 1, time: '09:00' }],
+      },
+    };
+    fake.create.mockResolvedValue({
+      choices: [
+        {
+          finish_reason: 'stop',
+          message: {
+            content: JSON.stringify({
+              identity: {
+                ...original.identity,
+                audience: 'Buyers',
+                positioning: 'Engineering services',
+                tone: 'Clear',
+                visualStyle: 'Simple',
+                language: 'es',
+                narration: { provider: 'openai', voice: 'onyx' },
+                primaryColor: '#ffffff',
+                schedule: { timezone: 'UTC', slots: [] },
+                madeForKids: false,
+                containsSyntheticMedia: false,
+              },
+            }),
+          },
+        },
+      ],
+    });
+    const result = await new StudioWriterService().generate(
+      'identity',
+      original
+    );
+    expect(result.identity.language).toBe('en');
+    expect(result.identity.narration).toEqual({ provider: 'recorded' });
+    expect(result.identity.primaryColor).toBe('#123456');
+    expect(result.identity.schedule).toEqual(original.identity.schedule);
+    expect(result.identity).not.toHaveProperty('madeForKids');
+    expect(result.identity).not.toHaveProperty('containsSyntheticMedia');
+    expect(fake.create.mock.calls[0][0].messages[0].content).toContain(
+      'em inglês'
+    );
+  });
   it('rejects malformed model payloads without a runtime crash or saved-state mutation', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'test-key');
     for (const content of ['null', '{"topic":12}', '{"scenes":[null]}']) {

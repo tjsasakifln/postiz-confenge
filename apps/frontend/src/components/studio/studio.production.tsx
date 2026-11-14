@@ -10,7 +10,12 @@ import type {
 } from '@gitroom/helpers/studio/studio.types';
 import { showMediaBox } from '@gitroom/frontend/components/media/media.component';
 import { useUppyUploader } from '@gitroom/frontend/components/media/new.uploader';
-import { useStudioRenderJob, useStudioRequest } from './studio.hooks';
+import {
+  useStudioProductionCapabilities,
+  useStudioRenderJob,
+  useStudioRequest,
+} from './studio.hooks';
+import { StudioBranding } from './studio.branding';
 import type { StudioDocumentEditorProps } from './studio.project';
 import {
   StudioButton,
@@ -257,6 +262,7 @@ export const StudioProduction = ({
   ) => Promise<void>;
 }) => {
   const request = useStudioRequest();
+  const production = useStudioProductionCapabilities(project.id);
   const [asset, setAsset] = useState<{
     id: string;
     path: string;
@@ -294,6 +300,34 @@ export const StudioProduction = ({
   const [retry, setRetry] = useState('0');
   const addingRef = useRef<HTMLDivElement>(null);
   const operation = useRef(false);
+  const narration = document.identity.narration;
+  const effectiveVoice =
+    narration?.provider === 'local'
+      ? 'local'
+      : narration?.provider === 'openai'
+      ? narration.voice || 'nova'
+      : voice;
+  const selectedForRender = selectedScenes.length
+    ? document.scenes.filter((scene) => selectedScenes.includes(scene.id))
+    : document.scenes;
+  const missingAudio = selectedForRender.some(
+    (scene) =>
+      !scene.audioMediaId ||
+      !document.media.some(
+        (item) => item.id === scene.audioMediaId && item.kind === 'audio'
+      )
+  );
+  const speechError = !production.data
+    ? undefined
+    : missingAudio && narration?.provider === 'recorded'
+    ? 'A identidade usa gravação própria. Adicione um áudio a cada cena selecionada antes de produzir.'
+    : missingAudio && effectiveVoice === 'local' && !production.data?.localVoice
+    ? 'A voz local não está disponível neste servidor. Configure-a ou revise a origem da narração na Identidade.'
+    : missingAudio &&
+      effectiveVoice !== 'local' &&
+      !production.data?.openaiVoice
+    ? 'A voz do provedor não está configurada. Adicione gravações ou selecione uma voz local disponível.'
+    : undefined;
 
   const selectAsset = (
     value: { id: string; path: string; name?: string },
@@ -340,7 +374,14 @@ export const StudioProduction = ({
   };
 
   const render = async () => {
-    if (blocked || starting || operation.current || !project.approvals.script)
+    if (
+      blocked ||
+      starting ||
+      operation.current ||
+      !project.approvals.script ||
+      !production.data?.available ||
+      speechError
+    )
       return;
     operation.current = true;
     setStarting(true);
@@ -353,7 +394,10 @@ export const StudioProduction = ({
           body: JSON.stringify({
             revision: project.revision,
             format,
-            voice,
+            ...(narration?.provider === 'recorded'
+              ? {}
+              : { voice: effectiveVoice }),
+            language: document.identity.language || 'pt-BR',
             ...(selectedScenes.length ? { sceneIds: selectedScenes } : {}),
             ...(story ? { maxDurationSeconds: 30 } : {}),
             attempt: Number(retry),
@@ -414,6 +458,9 @@ export const StudioProduction = ({
   return (
     <>
       {error && <StudioMessage error>{error}</StudioMessage>}
+      {production.error && (
+        <StudioMessage error>{production.error.message}</StudioMessage>
+      )}
       <StudioSection
         title="Mídias e direitos de uso"
         description="Use arquivos próprios, licenciados ou em domínio público. Registre a origem antes de incorporá-los às cenas e aos pacotes."
@@ -576,7 +623,7 @@ export const StudioProduction = ({
                   {item.kind === 'video' && (
                     <StudioButton
                       secondary
-                      disabled={blocked || !capabilities?.media.available}
+                      disabled={blocked || !production.data?.available}
                       onClick={() =>
                         void onProjectAction(
                           'style',
@@ -610,7 +657,8 @@ export const StudioProduction = ({
           </StudioMessage>
         )}
         <p className="text-sm text-textItemBlur">
-          {capabilities?.media.reason ||
+          {production.data?.reason ||
+            capabilities?.media.reason ||
             'Verificando disponibilidade da produção.'}
         </p>
         <div className="grid gap-4 lg:grid-cols-2">
@@ -626,17 +674,32 @@ export const StudioProduction = ({
               </option>
             ))}
           </StudioSelect>
-          <StudioSelect
-            label="Voz para cenas sem gravação"
-            value={voice}
-            onChange={setVoice}
-            disabled={starting}
-          >
-            <option value="nova">Nova</option>
-            <option value="alloy">Alloy</option>
-            <option value="onyx">Onyx</option>
-            <option value="shimmer">Shimmer</option>
-          </StudioSelect>
+          {narration?.provider === 'recorded' ? (
+            <p className="text-sm">
+              Narração: gravação própria por cena, conforme a identidade
+              aprovada.
+            </p>
+          ) : (
+            <StudioSelect
+              label="Voz para cenas sem gravação"
+              value={effectiveVoice}
+              onChange={setVoice}
+              disabled={starting || Boolean(narration)}
+              hint={
+                narration
+                  ? 'A escolha vem da identidade salva. Revise a identidade para alterá-la.'
+                  : 'A voz local usa o servidor. As demais vozes usam a conta OpenAI configurada.'
+              }
+            >
+              <option value="nova">Nova</option>
+              <option value="alloy">Alloy</option>
+              <option value="onyx">Onyx</option>
+              <option value="shimmer">Shimmer</option>
+              <option value="local" disabled={!production.data?.localVoice}>
+                Voz local{production.data?.localVoice ? '' : ' (indisponível)'}
+              </option>
+            </StudioSelect>
+          )}
           <StudioSelect
             label="Música de fundo"
             value={document.backgroundMusicMediaId || ''}
@@ -717,13 +780,15 @@ export const StudioProduction = ({
           A geração pode ter custo. Falhas não iniciam outra geração
           automaticamente.
         </p>
+        {speechError && <StudioMessage error>{speechError}</StudioMessage>}
         <StudioButton
           onClick={() => void render()}
           disabled={
             blocked ||
             starting ||
             !project.approvals.script ||
-            !capabilities?.media.available ||
+            !production.data?.available ||
+            Boolean(speechError) ||
             document.scenes.length === 0
           }
           loading={starting}
@@ -749,53 +814,14 @@ export const StudioProduction = ({
         </div>
       </StudioSection>
 
-      <StudioSection
-        title="Capas, carrossel e peças de identidade"
-        description="Gere arquivos PNG a partir do conteúdo aprovado. Confira texto, contraste e cortes; depois escolha as peças em cada pacote."
-      >
-        <div className="flex flex-wrap gap-3">
-          <StudioButton
-            secondary
-            disabled={blocked || !project.approvals.script}
-            loading={pending === 'images'}
-            onClick={() =>
-              void onProjectAction(
-                'images',
-                { kind: 'thumbnails' },
-                'Capas criadas e anexadas à biblioteca do conteúdo.'
-              )
-            }
-          >
-            Criar três capas
-          </StudioButton>
-          <StudioButton
-            secondary
-            disabled={blocked || !project.approvals.script}
-            onClick={() =>
-              void onProjectAction(
-                'images',
-                { kind: 'carousel' },
-                'Carrossel criado. Confira a ordem e os textos antes de aprovar o pacote.'
-              )
-            }
-          >
-            Criar carrossel
-          </StudioButton>
-          <StudioButton
-            secondary
-            disabled={blocked || !project.approvals.identity}
-            onClick={() =>
-              void onProjectAction(
-                'images',
-                { kind: 'brand' },
-                'Peças de identidade criadas. Confira os arquivos antes de usar.'
-              )
-            }
-          >
-            Criar peças de identidade
-          </StudioButton>
-        </div>
-      </StudioSection>
+      <StudioBranding
+        project={project}
+        document={document}
+        capabilities={production.data}
+        blocked={blocked || starting}
+        pending={pending}
+        onAction={onProjectAction}
+      />
       {document.renders.length > 0 && (
         <StudioSection title="Vídeos anexados ao conteúdo">
           <div className="grid gap-5 lg:grid-cols-2">

@@ -1,6 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import {
+  STUDIO_SOUND_EFFECTS,
+  type StudioSoundEffect,
+} from '@gitroom/helpers/studio/studio.sound-effects';
 import type {
   StudioPackage,
   StudioPlatform,
@@ -547,6 +551,25 @@ export const StudioScenesEditor = ({
                   <option value="card">Cartela com texto</option>
                   <option value="image">Imagem da biblioteca</option>
                   <option value="video">Vídeo da biblioteca</option>
+                </StudioSelect>
+                <StudioSelect
+                  label={`Efeito sonoro da cena ${index + 1}`}
+                  value={scene.soundEffect || ''}
+                  onChange={(soundEffect) =>
+                    patch(scene.id, {
+                      soundEffect: soundEffect
+                        ? (soundEffect as StudioSoundEffect)
+                        : undefined,
+                    })
+                  }
+                  hint="Opcional. Um som curto do catálogo próprio será aplicado em volume baixo no início da cena."
+                >
+                  <option value="">Nenhum efeito</option>
+                  {STUDIO_SOUND_EFFECTS.map((effect) => (
+                    <option key={effect.id} value={effect.id}>
+                      {effect.label}
+                    </option>
+                  ))}
                 </StudioSelect>
               </div>
               <StudioField

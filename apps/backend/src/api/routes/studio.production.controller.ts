@@ -32,6 +32,14 @@ import {
 export class StudioProductionController {
   constructor(private readonly production: StudioProductionManager) {}
 
+  @Get('/:id/production-capabilities')
+  capabilities(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    return this.production.capabilities(org.id, id);
+  }
+
   @Post('/:id/render')
   render(
     @GetOrgFromRequest() org: Organization,

@@ -9,6 +9,10 @@ on:
       - 'libraries/nestjs-libraries/src/database/prisma/schema.prisma'
       - '.github/workflows/studio.yml'
       - 'vitest.studio.config.mts'
+      - 'apps/studio-agent/**'
+      - 'apps/backend/src/public-api/**'
+      - 'apps/frontend/studio-preview/**'
+      - 'apps/frontend/playwright.studio.config.ts'
 permissions:
   contents: read
 jobs:
@@ -36,12 +40,21 @@ jobs:
         with:
           node-version: 22.23.4
       - run: corepack enable
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core espeak-ng
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm run prisma-generate
       - run: pnpm run prisma-db-push
       - run: pnpm run test:studio
       - run: pnpm exec vitest run --config apps/frontend/vitest.studio.config.mts
+      - run: pnpm run test:studio-agent
       - run: pnpm exec tsc --project apps/frontend/tsconfig.json --noEmit
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright test --config apps/frontend/studio-preview/playwright.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: studio-interface
+          path: test-results/studio-preview
+          retention-days: 7
       - run: pnpm run build:backend
       - run: pnpm run build:orchestrator

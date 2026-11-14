@@ -13,7 +13,18 @@ export const StudioButton = ({
   children,
   ...props
 }: ComponentProps<typeof Button>) => (
-  <Button {...props} className={clsx(studioFocusClass, props.className)}>
+  <Button
+    {...props}
+    className={clsx(
+      studioFocusClass,
+      'min-h-[40px] !h-auto max-w-full py-2 text-sm',
+      props.className
+    )}
+    innerClassName={clsx(
+      'min-w-0 text-center leading-snug',
+      props.innerClassName
+    )}
+  >
     {children}
   </Button>
 );
@@ -33,6 +44,8 @@ export const StudioField = ({
   step,
   disabled,
   maxLength,
+  pattern,
+  validationMessage,
 }: {
   label: string;
   value: string | number;
@@ -48,6 +61,8 @@ export const StudioField = ({
   step?: number | string;
   disabled?: boolean;
   maxLength?: number;
+  pattern?: string;
+  validationMessage?: string;
 }) => {
   const id = useId();
   const inputProps = {
@@ -59,8 +74,14 @@ export const StudioField = ({
     required,
     disabled,
     maxLength,
+    ref: (element: HTMLInputElement | HTMLTextAreaElement | null) =>
+      element?.setCustomValidity(validationMessage || ''),
     className: studioInputClass,
-    'aria-describedby': hint ? `${id}-hint` : undefined,
+    'aria-invalid': Boolean(validationMessage) || undefined,
+    'aria-describedby':
+      [hint ? `${id}-hint` : '', validationMessage ? `${id}-error` : '']
+        .filter(Boolean)
+        .join(' ') || undefined,
   };
   return (
     <div className="min-w-0 space-y-1.5">
@@ -71,7 +92,14 @@ export const StudioField = ({
       {multiline ? (
         <textarea {...inputProps} rows={rows} />
       ) : (
-        <input {...inputProps} type={type} min={min} max={max} step={step} />
+        <input
+          {...inputProps}
+          type={type}
+          min={min}
+          max={max}
+          step={step}
+          pattern={pattern}
+        />
       )}
       {hint && (
         <p
@@ -79,6 +107,11 @@ export const StudioField = ({
           className="text-xs leading-relaxed text-textItemBlur"
         >
           {hint}
+        </p>
+      )}
+      {validationMessage && (
+        <p id={`${id}-error`} className="text-xs text-red-400" role="alert">
+          {validationMessage}
         </p>
       )}
     </div>

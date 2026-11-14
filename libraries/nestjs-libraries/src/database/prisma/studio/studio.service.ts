@@ -147,7 +147,7 @@ export class StudioService {
       publishing: {
         available: connected.length > 0,
         reason: connected.length
-          ? 'Crie rascunhos após aprovar o pacote. Revise e agende no calendário do Postiz. Este estúdio não publica automaticamente.'
+          ? 'Crie rascunhos após aprovar o pacote e agende no calendário do Postiz. A grade de YouTube e Instagram tem configuração e confirmação próprias.'
           : 'Conecte um canal do YouTube, Instagram ou LinkedIn para criar rascunhos.',
       },
       platforms,
@@ -239,6 +239,7 @@ export class StudioService {
       outcomes: row.outcomes.map((item) => ({
         id: item.id,
         stage: item.stage as any,
+        externalId: item.externalId || undefined,
         valueCents: item.valueCents ?? undefined,
         currency: item.currency,
         reference: item.reference,
@@ -855,13 +856,18 @@ export class StudioService {
     actorId: string
   ) {
     await this.get(org, id);
+    if (
+      body.externalId !== undefined &&
+      (typeof body.externalId !== 'string' || !body.externalId.trim())
+    )
+      throw new BadRequestException('Informe um identificador externo válido.');
     if (!body.reference.trim())
       throw new BadRequestException(
         'Informe uma referência verificável para este resultado.'
       );
     if (
       ['proposal', 'contract', 'invoiced', 'received'].includes(body.stage) &&
-      body.valueCents === undefined
+      body.valueCents == null
     )
       throw new BadRequestException(
         'Informe o valor desta etapa, em centavos.'
@@ -873,6 +879,7 @@ export class StudioService {
     await this.repository.outcome(org, id, actorId, {
       ...body,
       reference: body.reference.trim(),
+      ...(body.externalId ? { externalId: body.externalId.trim() } : {}),
     });
     return this.get(org, id);
   }
