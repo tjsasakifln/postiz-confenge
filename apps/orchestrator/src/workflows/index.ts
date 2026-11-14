@@ -20,3 +20,5 @@ export * from './generate.video.workflow';
 export * from './process.media.workflow';
 export * from './clipping.workflow';
 export * from './encrypt.tokens.workflow';
+export * from './studio.production.workflow';
+export * from './studio.distribution.workflow';

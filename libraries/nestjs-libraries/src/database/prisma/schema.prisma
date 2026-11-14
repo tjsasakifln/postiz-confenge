@@ -45,11 +45,240 @@ model Organization {
   webhooks            Webhooks[]
   oauthApp            OAuthApp[]
   oauthAuthorizations OAuthAuthorization[]
+  studioProjects      StudioProject[]
+  studioDistributionBatches StudioDistributionBatch[]
 
   @@index([apiKey])
   @@index([streakSince])
   @@index([paymentId])
   @@index([deletedAt])
+}
+
+model StudioProject {
+  id             String              @id @default(uuid())
+  organizationId String
+  title          String
+  revision       Int                 @default(1)
+  document       Json
+  approvals      Json                @default("{}")
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events         StudioEvent[]
+  publications   StudioPublication[]
+  outcomes       StudioOutcome[]
+  audience       StudioAudienceThread[]
+  distributionItems StudioDistributionItem[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, updatedAt])
+}
+
+// Native publishing is deliberately separate from the historical post workflows.
+model StudioDistributionBatch {
+  id             String   @id @default(uuid())
+  organizationId String
+  revision       Int      @default(1)
+  state          String   @default("planned")
+  timezone       String
+  quotaScope     String
+  quotaBudget    Json
+  quotaEstimate  Json
+  mirrorEnabled  Boolean  @default(false)
+  confirmedBy    String?
+  confirmedAt    DateTime?
+  preflightAt    DateTime?
+  workflowId     String?
+  errorCode      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  items          StudioDistributionItem[]
+  quotaReservations StudioDistributionQuotaReservation[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, createdAt])
+}
+
+model StudioDistributionItem {
+  id             String   @id @default(uuid())
+  organizationId String
+  batchId        String
+  projectId      String
+  projectRevision Int
+  packageHash    String
+  integrationId  String
+  integrationName String
+  mediaId        String
+  title          String
+  publishAt      DateTime
+  madeForKids    Boolean
+  containsSyntheticMedia Boolean
+  snapshot       Json
+  phase          String   @default("planned")
+  revision       Int      @default(1)
+  publicationId  String?
+  postId         String?
+  youtubeVideoId String?
+  youtubePrivacy String?
+  youtubePublishAt DateTime?
+  youtubeObservedAt DateTime?
+  youtubePublicConfirmedAt DateTime?
+  youtubeReservationReleased Boolean @default(false)
+  // Resumable URI is private and encrypted with the configured Postiz provider.
+  uploadSession  String?
+  thumbnailApplied Boolean @default(false)
+  instagramIntegrationId String?
+  instagramIntegrationName String?
+  instagramPublicationId String?
+  instagramPostId String?
+  instagramContainerId String?
+  instagramMediaId String?
+  instagramPublishedAt DateTime?
+  instagramReservationReleased Boolean @default(false)
+  instagramUrl   String?
+  mirrorKey      String? @unique
+  nextActionAt   DateTime?
+  attemptId      String?
+  attemptStage   String?
+  leaseUntil     DateTime?
+  readAttempts   Int @default(0)
+  uploadAttempts Int @default(0)
+  containerChecks Int @default(0)
+  errorCode      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  batch          StudioDistributionBatch @relation(fields: [batchId, organizationId], references: [id, organizationId], onDelete: Cascade)
+  project        StudioProject @relation(fields: [projectId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([organizationId, batchId])
+  @@index([organizationId, projectId])
+  @@index([phase, nextActionAt])
+}
+
+model StudioDistributionQuotaDay {
+  id             String @id @default(uuid())
+  scope          String
+  day            String
+  uploadsReserved Int @default(0)
+  otherUnitsReserved Int @default(0)
+  updatedAt      DateTime @updatedAt
+  reservations   StudioDistributionQuotaReservation[]
+
+  @@unique([scope, day])
+}
+
+model StudioDistributionQuotaReservation {
+  id             String @id @default(uuid())
+  batchId        String
+  quotaDayId     String
+  uploads        Int
+  otherUnits     Int
+  createdAt      DateTime @default(now())
+  batch          StudioDistributionBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  quotaDay       StudioDistributionQuotaDay @relation(fields: [quotaDayId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, quotaDayId])
+}
+
+model StudioDistributionMirrorGate {
+  id             String @id @default(uuid())
+  organizationId String
+  targetKey      String @unique
+  activeItemId   String?
+  lastAttemptAt  DateTime?
+  lastPublishedAt DateTime?
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+}
+
+model StudioEvent {
+  id             String        @id @default(uuid())
+  organizationId String
+  projectId      String
+  revision       Int
+  action         String
+  actorId        String
+  detail         Json
+  createdAt      DateTime      @default(now())
+  project        StudioProject @relation(fields: [projectId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([organizationId, projectId, createdAt])
+}
+
+model StudioPublication {
+  id             String        @id @default(uuid())
+  organizationId String
+  projectId      String
+  revision       Int
+  packageHash    String
+  platform       String
+  integrationId  String
+  postId         String        @unique
+  state          String        @default("creating")
+  error          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  project        StudioProject @relation(fields: [projectId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([projectId, packageHash, integrationId])
+  @@index([organizationId, projectId])
+}
+
+model StudioOutcome {
+  id             String        @id @default(uuid())
+  organizationId String
+  externalId     String?
+  projectId      String
+  stage          String
+  valueCents     Int?
+  currency       String        @default("BRL")
+  reference      String
+  note           String
+  recordedBy     String
+  occurredAt     DateTime
+  createdAt      DateTime      @default(now())
+  project        StudioProject @relation(fields: [projectId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([organizationId, projectId, stage])
+  @@unique([projectId, stage, reference])
+  @@unique([organizationId, externalId])
+}
+
+model StudioAudienceThread {
+  id                String        @id @default(uuid())
+  organizationId    String
+  projectId         String
+  integrationId     String
+  postId            String
+  platform          String
+  externalThreadId  String
+  externalCommentId String
+  authorId          String?
+  authorName        String
+  text              String
+  externalUrl       String?
+  publishedAt       DateTime
+  observedAt        DateTime
+  respondedAt       DateTime?
+  replyDraft        String?
+  draftHash         String?
+  approvalHash      String?
+  approvedBy        String?
+  approvedAt        DateTime?
+  replyState        String        @default("none")
+  externalReplyId   String?
+  sendAttemptId     String?
+  attemptedAt       DateTime?
+  errorCode         String?
+  revision          Int           @default(1)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  project           StudioProject @relation(fields: [projectId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([organizationId, integrationId, externalCommentId])
+  @@index([organizationId, projectId])
 }
 
 model Tags {

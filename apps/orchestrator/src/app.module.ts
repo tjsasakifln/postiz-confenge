@@ -10,8 +10,13 @@ import { MediaActivity } from '@gitroom/orchestrator/activities/media.activity';
 import { ClippingActivity } from '@gitroom/orchestrator/activities/clipping.activity';
 import { VideoModule } from '@gitroom/nestjs-libraries/videos/video.module';
 import { HealthController } from '@gitroom/orchestrator/health.controller';
+import { StudioActivity } from '@gitroom/orchestrator/activities/studio.activity';
+import { StudioDistributionActivity } from '@gitroom/orchestrator/activities/studio.distribution.activity';
+import { StudioDistributionModule } from '@gitroom/nestjs-libraries/studio/studio.distribution.module';
 
 const activities = [
+  StudioActivity,
+  StudioDistributionActivity,
   PostActivity,
   AutopostActivity,
   EmailActivity,
@@ -23,6 +28,7 @@ const activities = [
 @Module({
   imports: [
     DatabaseModule,
+    StudioDistributionModule,
     VideoModule,
     getTemporalModule(true, require.resolve('./workflows'), activities),
   ],

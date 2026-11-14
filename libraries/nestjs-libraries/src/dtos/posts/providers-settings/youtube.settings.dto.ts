@@ -1,12 +1,15 @@
 import {
   IsArray,
+  IsBoolean,
   IsDefined,
   IsIn,
   IsOptional,
+  IsISO8601,
   IsString,
   MaxLength,
   MinLength,
   registerDecorator,
+  Validate,
   ValidateNested,
   ValidationArguments,
   ValidationOptions,
@@ -63,6 +66,18 @@ export class YoutubeTagsSettings {
   label: string;
 }
 
+@ValidatorConstraint({ name: 'IsYoutubeFuturePrivateSchedule', async: false })
+export class IsYoutubeFuturePrivateSchedule implements ValidatorConstraintInterface {
+  validate(value: unknown, args: ValidationArguments) {
+    if (value === undefined || value === null) return true;
+    return typeof value === 'string' && (args.object as YoutubeSettingsDto).type === 'private' &&
+      Number.isFinite(Date.parse(value)) && Date.parse(value) > Date.now();
+  }
+  defaultMessage() {
+    return 'Native YouTube scheduling requires a future publishAt and private visibility.';
+  }
+}
+
 export class YoutubeSettingsDto {
   // YouTube's own limits only (title 1-100 characters), the Required Minimum
   // Functionality does not allow more
@@ -75,6 +90,15 @@ export class YoutubeSettingsDto {
   @IsIn(['public', 'private', 'unlisted'])
   @IsDefined()
   type: string;
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  @Validate(IsYoutubeFuturePrivateSchedule)
+  publishAt?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  containsSyntheticMedia?: boolean;
 
   @IsIn(['yes', 'no'])
   @IsOptional()

@@ -5,6 +5,8 @@ import { withSentryConfig } from '@sentry/nextjs';
 const nextConfig = {
   experimental: {
     proxyTimeout: 90_000,
+    webpackMemoryOptimizations: true,
+    webpackBuildWorker: true,
   },
   // Document-Policy header for browser profiling
   async headers() {
@@ -21,6 +23,9 @@ const nextConfig = {
     ];
   },
   reactStrictMode: false,
+  // jsdom reads its own CSS asset from disk. Preserve native package resolution
+  // for server-side HTML sanitization instead of moving its __dirname in a bundle.
+  serverExternalPackages: ['isomorphic-dompurify'],
   transpilePackages: ['crypto-hash'],
   // Enable production sourcemaps for Sentry
   productionBrowserSourceMaps: true,

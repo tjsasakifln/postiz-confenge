@@ -473,16 +473,15 @@ export class LinkedinPageProvider
       `urn:li:organization:${integrationId}`
     )}&shares=List(${encodeURIComponent(postId)})`;
 
-    const { elements: shareElements }: { elements: PostShareStatElement[] } =
-      await (
-        await fetch(shareStatsUrl, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'LinkedIn-Version': '202601',
-            'X-Restli-Protocol-Version': '2.0.0',
-          },
-        })
-      ).json();
+    const shareResponse = await fetch(shareStatsUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'LinkedIn-Version': '202601',
+        'X-Restli-Protocol-Version': '2.0.0',
+      },
+    });
+    const shareBody = shareResponse.ok ? await shareResponse.json() : {};
+    const shareElements: PostShareStatElement[] = Array.isArray(shareBody.elements) ? shareBody.elements : [];
 
     // Also fetch social actions (likes, comments, shares) for the specific post
     let socialActions: SocialActionsResponse | null = null;
@@ -490,15 +489,14 @@ export class LinkedinPageProvider
       const socialActionsUrl = `https://api.linkedin.com/v2/socialActions/${encodeURIComponent(
         postId
       )}`;
-      socialActions = await (
-        await fetch(socialActionsUrl, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'LinkedIn-Version': '202601',
-            'X-Restli-Protocol-Version': '2.0.0',
-          },
-        })
-      ).json();
+      const socialResponse = await fetch(socialActionsUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'LinkedIn-Version': '202601',
+          'X-Restli-Protocol-Version': '2.0.0',
+        },
+      });
+      socialActions = socialResponse.ok ? await socialResponse.json() : null;
     } catch (e) {
       // Social actions may not be available for all posts
     }
@@ -509,40 +507,19 @@ export class LinkedinPageProvider
         if (typeof current?.totalShareStatistics !== 'undefined') {
           const dateStr = dayjs(current.timeRange?.start).format('YYYY-MM-DD');
 
-          all['Impressions'].push({
-            total: current.totalShareStatistics.impressionCount || 0,
-            date: dateStr,
-          });
-
-          all['Unique Impressions'].push({
-            total: current.totalShareStatistics.uniqueImpressionsCount || 0,
-            date: dateStr,
-          });
-
-          all['Clicks'].push({
-            total: current.totalShareStatistics.clickCount || 0,
-            date: dateStr,
-          });
-
-          all['Likes'].push({
-            total: current.totalShareStatistics.likeCount || 0,
-            date: dateStr,
-          });
-
-          all['Comments'].push({
-            total: current.totalShareStatistics.commentCount || 0,
-            date: dateStr,
-          });
-
-          all['Shares'].push({
-            total: current.totalShareStatistics.shareCount || 0,
-            date: dateStr,
-          });
-
-          all['Engagement'].push({
-            total: current.totalShareStatistics.engagement || 0,
-            date: dateStr,
-          });
+          const values = [
+            ['Impressions', current.totalShareStatistics.impressionCount],
+            ['Unique Impressions', current.totalShareStatistics.uniqueImpressionsCount],
+            ['Clicks', current.totalShareStatistics.clickCount],
+            ['Likes', current.totalShareStatistics.likeCount],
+            ['Comments', current.totalShareStatistics.commentCount],
+            ['Shares', current.totalShareStatistics.shareCount],
+            ['Engagement', current.totalShareStatistics.engagement],
+          ] as const;
+          for (const [label, value] of values) {
+            // Omitted or inaccessible fields are not measured zeros.
+            if (typeof value === 'number' && Number.isFinite(value)) all[label].push({ total: value, date: dateStr });
+          }
         }
         return all;
       },
@@ -563,14 +540,13 @@ export class LinkedinPageProvider
       socialActions
     ) {
       const today = dayjs().format('YYYY-MM-DD');
-      analytics['Likes'].push({
-        total: socialActions.likesSummary?.totalLikes || 0,
-        date: today,
-      });
-      analytics['Comments'].push({
-        total: socialActions.commentsSummary?.totalFirstLevelComments || 0,
-        date: today,
-      });
+      const values = [
+        ['Likes', socialActions.likesSummary?.totalLikes],
+        ['Comments', socialActions.commentsSummary?.totalFirstLevelComments],
+      ] as const;
+      for (const [label, value] of values) {
+        if (typeof value === 'number' && Number.isFinite(value)) analytics[label].push({ total: value, date: today });
+      }
     }
 
     // Filter out empty analytics

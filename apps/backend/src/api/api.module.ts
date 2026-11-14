@@ -56,8 +56,18 @@ import { FarcasterProvider } from '@gitroom/backend/services/auth/providers/farc
 import { WalletProvider } from '@gitroom/backend/services/auth/providers/wallet.provider';
 import { OauthProvider } from '@gitroom/backend/services/auth/providers/oauth.provider';
 import { StripeController } from '@gitroom/backend/api/routes/stripe.controller';
+import { StudioController } from '@gitroom/backend/api/routes/studio.controller';
+import { StudioProductionController } from '@gitroom/backend/api/routes/studio.production.controller';
+import { StudioAudienceController } from '@gitroom/backend/api/routes/studio.audience.controller';
+import { StudioAudienceModule } from '@gitroom/nestjs-libraries/studio/audience/studio.audience.module';
+import { StudioDistributionModule } from '@gitroom/nestjs-libraries/studio/studio.distribution.module';
+import { StudioDistributionController } from '@gitroom/backend/api/routes/studio.distribution.controller';
 
 const authenticatedController = [
+  StudioController,
+  StudioProductionController,
+  StudioAudienceController,
+  StudioDistributionController,
   UsersController,
   AnalyticsController,
   IntegrationsController,
@@ -80,7 +90,7 @@ const authenticatedController = [
   AdminController,
 ];
 @Module({
-  imports: [UploadModule],
+  imports: [UploadModule, StudioAudienceModule, StudioDistributionModule],
   controllers: process.env.MCP_ONLY
     ? [
         RootController,

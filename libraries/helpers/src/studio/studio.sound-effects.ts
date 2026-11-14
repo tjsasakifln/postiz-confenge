@@ -1,0 +1,23 @@
+export const STUDIO_SOUND_EFFECTS = [
+  { id: 'click', label: 'Clique' },
+  { id: 'pop', label: 'Estalo suave' },
+  { id: 'tick', label: 'Toque curto' },
+  { id: 'tap', label: 'Batida discreta' },
+  { id: 'ping', label: 'Sinal agudo' },
+  { id: 'chime', label: 'Sino curto' },
+  { id: 'rise', label: 'Subida' },
+  { id: 'fall', label: 'Descida' },
+  { id: 'swoosh', label: 'Passagem de ar' },
+  { id: 'sweep', label: 'Passagem tonal' },
+  { id: 'sparkle', label: 'Brilho' },
+  { id: 'bell', label: 'Sino longo' },
+  { id: 'pulse', label: 'Pulso' },
+  { id: 'soft-hit', label: 'Impacto suave' },
+  { id: 'double-tap', label: 'Dois toques' },
+  { id: 'triple-tick', label: 'Três toques' },
+  { id: 'notification', label: 'Aviso' },
+  { id: 'transition', label: 'Transição' },
+  { id: 'low-pulse', label: 'Pulso grave' },
+  { id: 'soft-chime', label: 'Sino discreto' },
+] as const;
+export type StudioSoundEffect = (typeof STUDIO_SOUND_EFFECTS)[number]['id'];

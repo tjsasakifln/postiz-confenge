@@ -1,0 +1,5 @@
+[mcp_servers.confenge_studio]
+command = "node"
+args = ["--env-file=/ABS/PRIVATE/studio-agent.env", "/ABS/PATH/postiz-confenge/apps/studio-agent/dist/main.js"]
+startup_timeout_sec = 10
+tool_timeout_sec = 180

@@ -54,12 +54,24 @@ import { ErrorsRepository } from '@gitroom/nestjs-libraries/database/prisma/erro
 import { ErrorsService } from '@gitroom/nestjs-libraries/database/prisma/errors/errors.service';
 import { AdminStatsRepository } from '@gitroom/nestjs-libraries/database/prisma/admin-stats/admin-stats.repository';
 import { AdminStatsService } from '@gitroom/nestjs-libraries/database/prisma/admin-stats/admin-stats.service';
+import { StudioRepository } from '@gitroom/nestjs-libraries/database/prisma/studio/studio.repository';
+import { StudioService } from '@gitroom/nestjs-libraries/database/prisma/studio/studio.service';
+import { StudioWriterService } from '@gitroom/nestjs-libraries/studio/studio.writer.service';
+import { StudioProductionService } from '@gitroom/nestjs-libraries/studio/studio.production.service';
+import { StudioResearchService } from '@gitroom/nestjs-libraries/studio/studio.research.service';
+import { StudioProductionManager } from '@gitroom/nestjs-libraries/studio/studio.production.manager';
 
 @Global()
 @Module({
   imports: [],
   controllers: [],
   providers: [
+    StudioRepository,
+    StudioService,
+    StudioWriterService,
+    StudioProductionService,
+    StudioResearchService,
+    StudioProductionManager,
     PrismaService,
     PrismaRepository,
     PrismaTransaction,

@@ -1,0 +1,10 @@
+@use '../src/app/global.scss';
+
+html,
+body {
+  margin: 0;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+button:disabled {
+  cursor: not-allowed;
+}

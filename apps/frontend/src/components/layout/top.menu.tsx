@@ -43,6 +43,37 @@ export const useMenuItem = () => {
       path: '/launches',
     },
     {
+      name: t('studio', 'Estúdio'),
+      icon: (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+        >
+          <rect
+            x="3"
+            y="4"
+            width="18"
+            height="16"
+            rx="3"
+            stroke="currentColor"
+            strokeWidth="1.8"
+          />
+          <path
+            d="M3 9h18M8 4l3 5m4-5 3 5m-8 4 5 3-5 3v-6Z"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ),
+      path: '/studio',
+    },
+    {
       name: 'Agent',
       icon: (
         <svg

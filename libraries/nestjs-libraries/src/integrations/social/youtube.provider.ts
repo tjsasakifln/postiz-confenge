@@ -60,6 +60,14 @@ const clientAndYoutube = () => {
 export class YoutubeProvider extends SocialAbstract implements SocialProvider {
   override maxConcurrentJob = 200; // YouTube has strict upload quotas
   identifier = 'youtube';
+  studioDraftSettings(metadata: { title: string; tags: string[]; mediaCount: number; thumbnail?: { id: string; path: string } }) {
+    return {
+      __type: this.identifier, title: metadata.title, type: 'private',
+      selfDeclaredMadeForKids: 'no',
+      tags: metadata.tags.map((label) => ({ value: label, label })),
+      ...(metadata.thumbnail ? { thumbnail: metadata.thumbnail } : {}),
+    };
+  }
   name = 'YouTube';
   isBetweenSteps = true;
   dto = YoutubeSettingsDto;
@@ -592,9 +600,35 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
     postDetails: PostDetails[],
     integration: Integration
   ): Promise<PostResponse[]> {
+    return this.startYoutubeUpload(id, accessToken, postDetails, integration);
+  }
+
+  /** The distribution ledger reserves one insert; do not retry its POST implicitly. */
+  async studioStartUpload(
+    id: string, accessToken: string, postDetails: PostDetails[], integration: Integration
+  ): Promise<PostResponse[]> {
+    return this.startYoutubeUpload(id, accessToken, postDetails, integration, true);
+  }
+
+  async studioSetThumbnail(accessToken: string, videoId: string, path: string) {
+    const { client, youtube } = clientAndYoutube();
+    client.setCredentials({ access_token: accessToken });
+    await youtube(client).thumbnails.set({
+      videoId,
+      media: { body: (await this.getSsrfSafeAxios()({ url: path, method: 'GET', responseType: 'stream' })).data },
+    }, { retry: false });
+  }
+
+  private async startYoutubeUpload(
+    id: string, accessToken: string, postDetails: PostDetails[], integration: Integration,
+    oneAttempt = false
+  ): Promise<PostResponse[]> {
     const [firstPost, ...comments] = postDetails;
 
     const { settings }: { settings: YoutubeSettingsDto } = firstPost;
+    if (settings.publishAt && (settings.type !== 'private' || !Number.isFinite(Date.parse(settings.publishAt)) || Date.parse(settings.publishAt) <= Date.now())) {
+      throw new BadBody(this.identifier, '{}', '{}', 'Native YouTube scheduling requires a future publishAt and private visibility');
+    }
     const path = firstPost?.media?.[0]?.path!;
     const videoSize = await this.youtubeMediaSize(path);
 
@@ -622,9 +656,13 @@ export class YoutubeProvider extends SocialAbstract implements SocialProvider {
           status: {
             privacyStatus: settings.type,
             selfDeclaredMadeForKids: settings.selfDeclaredMadeForKids === 'yes',
+            ...(settings.publishAt ? { publishAt: new Date(settings.publishAt).toISOString() } : {}),
+            ...(typeof settings.containsSyntheticMedia === 'boolean' ? { containsSyntheticMedia: settings.containsSyntheticMedia } : {}),
           },
         }),
-      }
+      },
+      this.identifier,
+      oneAttempt ? 3 : 0
     );
 
     const uploadUri = session.headers.get('location');
