@@ -60,6 +60,14 @@ const clientAndYoutube = () => {
 export class YoutubeProvider extends SocialAbstract implements SocialProvider {
   override maxConcurrentJob = 200; // YouTube has strict upload quotas
   identifier = 'youtube';
+  studioDraftSettings(metadata: { title: string; tags: string[]; mediaCount: number; thumbnail?: { id: string; path: string } }) {
+    return {
+      __type: this.identifier, title: metadata.title, type: 'private',
+      selfDeclaredMadeForKids: 'no',
+      tags: metadata.tags.map((label) => ({ value: label, label })),
+      ...(metadata.thumbnail ? { thumbnail: metadata.thumbnail } : {}),
+    };
+  }
   name = 'YouTube';
   isBetweenSteps = true;
   dto = YoutubeSettingsDto;

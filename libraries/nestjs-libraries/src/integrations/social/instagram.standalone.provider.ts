@@ -26,6 +26,9 @@ export class InstagramStandaloneProvider
   implements SocialProvider
 {
   identifier = 'instagram-standalone';
+  studioDraftSettings() {
+    return { __type: this.identifier, post_type: 'post' };
+  }
   name = 'Instagram\n(Standalone)';
   isBetweenSteps = false;
   refreshCron = true;

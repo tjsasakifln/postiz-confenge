@@ -180,6 +180,12 @@ export interface SocialProvider
   extends IAuthenticator,
     ISocialMediaIntegration {
   identifier: string;
+  studioDraftSettings?(metadata: {
+    title: string;
+    tags: string[];
+    mediaCount: number;
+    thumbnail?: { id: string; path: string };
+  }): Record<string, unknown>;
   refreshWait?: boolean;
   // A token rejected by finalizePost means its mutation did not run (it makes
   // one mutating call): the post activity then refreshes the token and repeats

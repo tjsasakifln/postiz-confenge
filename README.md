@@ -1,3 +1,15 @@
+# Postiz CONFENGE
+
+Fork com Estúdio de conteúdo para YouTube, Instagram e LinkedIn: planejamento, fontes, roteiro por cenas, produção de mídia, aprovação humana e acompanhamento comercial.
+
+- [Uso e instalação do Estúdio](docs/studio/README.md)
+- [Cobertura dos requisitos e limites](docs/studio/COVERAGE.md)
+- [Verificação da entrega](docs/studio/VERIFICATION.md)
+
+A área nova fica em `/studio`. Esta implementação independente usa o Postiz como base e preserva sua licença AGPL-3.0. As diferenças em relação ao escopo completo do livro estão documentadas.
+
+## Projeto de origem
+
 <p align="center">
   <a href="https://postiz.com/" target="_blank">
   <picture>

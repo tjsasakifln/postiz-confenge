@@ -59,6 +59,9 @@ type LinkedinPendingData = {
 )
 export class LinkedinProvider extends SocialAbstract implements SocialProvider {
   identifier = 'linkedin';
+  studioDraftSettings(metadata: { title: string; tags: string[]; mediaCount: number }) {
+    return { __type: this.identifier, post_as_images_carousel: metadata.mediaCount > 1, carousel_name: metadata.title };
+  }
   name = 'LinkedIn';
   oneTimeToken = true;
 

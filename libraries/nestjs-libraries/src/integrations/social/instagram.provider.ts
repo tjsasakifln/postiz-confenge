@@ -31,6 +31,9 @@ export class InstagramProvider
   implements SocialProvider
 {
   identifier = 'instagram';
+  studioDraftSettings() {
+    return { __type: this.identifier, post_type: 'post' };
+  }
   name = 'Instagram\n(Facebook Business)';
   isBetweenSteps = true;
   toolTip = 'Instagram must be business and connected to a Facebook page';

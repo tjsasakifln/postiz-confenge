@@ -1,0 +1,46 @@
+# Verificação do Estúdio
+
+Este registro separa código testado localmente de validação nas contas reais.
+
+## Conferido localmente
+
+| Verificação | Resultado |
+|---|---|
+| Prisma Client 6.5.0 gerado a partir do schema do fork | Passou. |
+| Build NestJS do backend | Passou com limite de heap de 6 GB. |
+| Build NestJS do orquestrador | Passou com limite de heap de 6 GB. |
+| TypeScript do frontend | Passou. |
+| Testes do núcleo, audiência, pesquisa, produção e limites de workflow | Passaram nos comandos indicados abaixo. |
+| Testes de interface em ambiente de DOM simulado | Passaram. |
+| MP4 com FFmpeg real | Verificados vídeo H.264, áudio, duração e dimensões 1080x1920, 1920x1080 e 1080x1080. |
+| PNGs e legendas | Capas/carrossel reais; texto de pronúncia não entra na legenda; legenda longa não é cortada silenciosamente; corte para Story limita também a legenda. |
+| Isolamento e entradas de mídia | Testados organização diferente, origem/licença ausente, link simbólico fora do armazenamento e playlist disfarçada de áudio. |
+| Aprovações e concorrência | Testadas revisão obsoleta, fontes de risco alto, alteração de etapa, reserva idempotente e conteúdo histórico aprovado. |
+| Respostas a comentários | Testados edição após aprovação, reserva concorrente, sucesso, timeout, HTTP 408/499, reconciliação e falha de persistência depois de envio. |
+| Ausência de métricas | Testado erro de permissão, campo ausente e zero medido no LinkedIn Page. |
+
+Ambiente local: Node 24.22.1 e pnpm 10.6.1 via Corepack. A versão declarada pelo projeto é Node 22.23.4; o workflow de CI usa essa versão.
+
+Comandos centrais:
+
+```sh
+corepack pnpm run test:studio
+corepack pnpm exec vitest run --config apps/frontend/vitest.studio.config.mts
+NODE_OPTIONS=--max-old-space-size=6144 corepack pnpm --filter ./apps/backend run build
+NODE_OPTIONS=--max-old-space-size=6144 corepack pnpm --filter ./apps/orchestrator run build
+corepack pnpm exec tsc --project apps/frontend/tsconfig.json --noEmit
+```
+
+## Limites da validação
+
+- Não houve publicação, resposta a comentário ou chamada paga nas contas reais. Os testes de adaptadores usam respostas controladas.
+- Os quatro testes de concorrência/persistência PostgreSQL são opt-in, exigem banco descartável e estão configurados no workflow `Studio verification`. Não foram executados no ambiente local sem PostgreSQL.
+- A tentativa de captura visual do frontend por Chromium foi bloqueada pelo ambiente com erro de criação de socket. Não se declara inspeção visual completa de desktop/mobile com base nos testes de DOM.
+- O primeiro build de produção Next.js terminou por limite de memória do ambiente. A checagem TypeScript e os testes de interface passaram; o resultado da tentativa com otimização de memória será registrado separadamente.
+- Docker, OAuth dos canais, armazenamento R2 e worker Temporal conectado a uma instalação real precisam de homologação de operação.
+
+## Revisões independentes
+
+A implementação teve revisão cruzada de núcleo, audiência, produção e interface. A revisão dos requisitos comparou os 26 itens com o sumário e o capítulo fornecidos. Falhas materiais encontradas e corrigidas incluíram exposição de erro bruto de provedor, resposta incerta tratada como falha definitiva, aceitação de playlists como mídia, truncamento de legendas longas, associação de render com material alterado e ausência de aviso de pesquisa parcial.
+
+A matriz [COVERAGE.md](COVERAGE.md) registra a cobertura funcional e as lacunas. Aprovação dos testes locais não significa que as plataformas já concederam acesso nem que todas as promessas do livro estão implementadas.

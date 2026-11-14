@@ -1,0 +1,23 @@
+# Build this fork. The upstream prebuilt image does not contain Studio.
+# Use: docker compose -f docker-compose.yaml -f docker-compose.studio.yaml up -d --build
+services:
+  postiz:
+    image: postiz-confenge:local
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment:
+      JWT_SECRET: ${STUDIO_JWT_SECRET:?Set a unique STUDIO_JWT_SECRET in your .env}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      STUDIO_TEXT_MODEL: ${STUDIO_TEXT_MODEL:-gpt-4.1}
+      STUDIO_TTS_MODEL: ${STUDIO_TTS_MODEL:-tts-1}
+      YOUTUBE_DATA_API_KEY: ${YOUTUBE_DATA_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      YOUTUBE_CLIENT_ID: ${YOUTUBE_CLIENT_ID:-}
+      YOUTUBE_CLIENT_SECRET: ${YOUTUBE_CLIENT_SECRET:-}
+      FACEBOOK_APP_ID: ${FACEBOOK_APP_ID:-}
+      FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET:-}
+      INSTAGRAM_APP_ID: ${INSTAGRAM_APP_ID:-}
+      INSTAGRAM_APP_SECRET: ${INSTAGRAM_APP_SECRET:-}
+      LINKEDIN_CLIENT_ID: ${LINKEDIN_CLIENT_ID:-}
+      LINKEDIN_CLIENT_SECRET: ${LINKEDIN_CLIENT_SECRET:-}

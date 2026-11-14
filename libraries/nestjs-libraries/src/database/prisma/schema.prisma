@@ -45,11 +45,117 @@ model Organization {
   webhooks            Webhooks[]
   oauthApp            OAuthApp[]
   oauthAuthorizations OAuthAuthorization[]
+  studioProjects      StudioProject[]
 
   @@index([apiKey])
   @@index([streakSince])
   @@index([paymentId])
   @@index([deletedAt])
+}
+
+model StudioProject {
+  id             String              @id @default(uuid())
+  organizationId String
+  title          String
+  revision       Int                 @default(1)
+  document       Json
+  approvals      Json                @default("{}")
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events         StudioEvent[]
+  publications   StudioPublication[]
+  outcomes       StudioOutcome[]
+  audience       StudioAudienceThread[]
+
+  @@unique([id, organizationId])
+  @@index([organizationId, updatedAt])
+}
+
+model StudioEvent {
+  id             String        @id @default(uuid())
+  organizationId String
+  projectId      String
+  revision       Int
+  action         String
+  actorId        String
+  detail         Json
+  createdAt      DateTime      @default(now())
+  project        StudioProject @relation(fields: [projectId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([organizationId, projectId, createdAt])
+}
+
+model StudioPublication {
+  id             String        @id @default(uuid())
+  organizationId String
+  projectId      String
+  revision       Int
+  packageHash    String
+  platform       String
+  integrationId  String
+  postId         String        @unique
+  state          String        @default("creating")
+  error          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  project        StudioProject @relation(fields: [projectId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([projectId, packageHash, integrationId])
+  @@index([organizationId, projectId])
+}
+
+model StudioOutcome {
+  id             String        @id @default(uuid())
+  organizationId String
+  projectId      String
+  stage          String
+  valueCents     Int?
+  currency       String        @default("BRL")
+  reference      String
+  note           String
+  recordedBy     String
+  occurredAt     DateTime
+  createdAt      DateTime      @default(now())
+  project        StudioProject @relation(fields: [projectId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@index([organizationId, projectId, stage])
+  @@unique([projectId, stage, reference])
+}
+
+model StudioAudienceThread {
+  id                String        @id @default(uuid())
+  organizationId    String
+  projectId         String
+  integrationId     String
+  postId            String
+  platform          String
+  externalThreadId  String
+  externalCommentId String
+  authorId          String?
+  authorName        String
+  text              String
+  externalUrl       String?
+  publishedAt       DateTime
+  observedAt        DateTime
+  respondedAt       DateTime?
+  replyDraft        String?
+  draftHash         String?
+  approvalHash      String?
+  approvedBy        String?
+  approvedAt        DateTime?
+  replyState        String        @default("none")
+  externalReplyId   String?
+  sendAttemptId     String?
+  attemptedAt       DateTime?
+  errorCode         String?
+  revision          Int           @default(1)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  project           StudioProject @relation(fields: [projectId, organizationId], references: [id, organizationId], onDelete: Cascade)
+
+  @@unique([organizationId, integrationId, externalCommentId])
+  @@index([organizationId, projectId])
 }
 
 model Tags {

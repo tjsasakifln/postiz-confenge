@@ -5,6 +5,8 @@ import { withSentryConfig } from '@sentry/nextjs';
 const nextConfig = {
   experimental: {
     proxyTimeout: 90_000,
+    webpackMemoryOptimizations: true,
+    webpackBuildWorker: true,
   },
   // Document-Policy header for browser profiling
   async headers() {
