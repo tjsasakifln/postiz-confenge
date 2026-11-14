@@ -33,6 +33,7 @@ const verifyAndCapture = async (
         .map((element) => element.outerHTML)
     );
   expect(unlabelled, `${name}: controles sem rótulo acessível`).toEqual([]);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({
     path: testInfo.outputPath(`${name}.png`),
     fullPage: true,

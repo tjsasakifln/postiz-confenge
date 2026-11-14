@@ -991,10 +991,11 @@ export const StudioDistribution = ({
                     ))}
                   </StudioSelect>
                   <p className="text-xs text-textItemBlur">
-                    O espelhamento exige vídeo vertical ou quadrado de até três
-                    minutos e respeita pelo menos uma hora entre publicações na
-                    conta. As permissões e mídias serão conferidas antes da
-                    confirmação.
+                    O espelhamento exige vídeo vertical ou quadrado de três
+                    segundos a três minutos. Se selecionar uma capa, use JPEG de
+                    até 8 MB. Há um intervalo mínimo de uma hora entre
+                    publicações na conta. As permissões e mídias serão
+                    conferidas antes da confirmação.
                   </p>
                 </>
               )}
