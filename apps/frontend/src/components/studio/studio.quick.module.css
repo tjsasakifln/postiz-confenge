@@ -71,6 +71,7 @@
 .form details, .form .error { grid-column: 1 / -1; }
 .form summary { color: var(--muted); cursor: pointer; width: fit-content; font-size: .87rem; }
 .details { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.batchHint { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: .83rem; }
 .root button {
   display: inline-flex;
   min-height: 44px;
@@ -89,6 +90,21 @@
 .root button:disabled { opacity: .46; cursor: default; }
 .error { color: #9b3229; margin: 0; }
 .saved { margin: 16px 0; max-width: 430px; }
+.batch {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  margin-top: 20px;
+  padding: 16px 18px;
+  border: 1px solid #b8c765;
+  border-left: 6px solid var(--lime);
+  border-radius: 7px;
+  background: #fbfce9;
+}
+.batch strong { display: block; }
+.batch p { margin: 4px 0 0; color: var(--muted); font-size: .88rem; }
+.batchState { border: 1px solid var(--ink); border-radius: 999px; padding: 5px 9px; font-size: .75rem; font-weight: 750; white-space: nowrap; }
 .review { margin-top: 24px; }
 .suggestions { margin-top: 18px; }
 .suggestions .reviewHeader { margin-bottom: 0; }
@@ -116,6 +132,7 @@
 @media (max-width: 820px) {
   .form, .reviewGrid, .suggestionList { grid-template-columns: 1fr; }
   .reviewHeader { flex-wrap: wrap; }
+  .batch { align-items: flex-start; flex-wrap: wrap; }
   .header img { width: 120px; }
 }
 @media (max-width: 520px) {

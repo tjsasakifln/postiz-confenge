@@ -11,6 +11,13 @@ import { renderQuickCard } from './studio.quick.cards';
 import { Studio } from './studio.component';
 import styles from './studio.quick.module.css';
 
+type BatchState = 'idle' | 'queued' | 'draft' | 'review' | 'ready' | 'failed';
+
+interface EditorialBatch {
+  state: BatchState;
+  message?: string;
+}
+
 const errorText = (error: unknown) =>
   error instanceof Error ? error.message : 'Não foi possível concluir a solicitação.';
 
@@ -180,12 +187,49 @@ function Review({ project, format, onSaved }: {
   );
 }
 
+function BatchProgress({ batch, retrying, onRetry }: {
+  batch: EditorialBatch;
+  retrying: boolean;
+  onRetry: () => void;
+}) {
+  const phase: Record<Exclude<BatchState, 'idle' | 'ready' | 'failed'>, string> = {
+    queued: 'Na fila de geração aprofundada',
+    draft: 'Estruturando o conteúdo com as fontes',
+    review: 'Revisão editorial e adversarial em andamento',
+  };
+  if (batch.state === 'ready' || batch.state === 'idle') return null;
+  if (batch.state === 'failed') {
+    return (
+      <section className={styles.batch} aria-live="polite">
+        <div>
+          <strong>A geração em lote não foi concluída.</strong>
+          <p>{batch.message || 'O post ficou preservado para nova tentativa.'}</p>
+        </div>
+        <button type="button" onClick={onRetry} disabled={retrying}>
+          {retrying ? 'Reenviando…' : 'Tentar novamente'}
+        </button>
+      </section>
+    );
+  }
+  return (
+    <section className={styles.batch} aria-live="polite">
+      <div>
+        <strong>{phase[batch.state]}</strong>
+        <p>{batch.message || 'Você pode sair desta tela. O post ficará disponível aqui ao concluir.'}</p>
+      </div>
+      <span className={styles.batchState}>{batch.state === 'review' ? 'Revisão' : 'Em lote'}</span>
+    </section>
+  );
+}
+
 function QuickStudio() {
   const request = useStudioRequest();
   const router = useRouter();
   const selected = useSearchParams().get('post');
   const projects = useStudioProjects();
   const selectedProject = useStudioProject(selected);
+  const mutateProjects = projects.mutate;
+  const mutateSelectedProject = selectedProject.mutate;
   const project = selectedProject.data;
   const activeFormat = project && getQuickFormat(project.document.identity.visualStyle);
   const [topic, setTopic] = useState('');
@@ -196,8 +240,42 @@ function QuickStudio() {
   const [objective, setObjective] = useState('Orientar uma decisão prática de obra');
   const [error, setError] = useState('');
   const [working, setWorking] = useState(false);
+  const [generationMode, setGenerationMode] = useState<'batch' | 'immediate'>('batch');
   const [suggesting, setSuggesting] = useState(false);
   const [suggestions, setSuggestions] = useState<QuickSuggestions>();
+  const [batch, setBatch] = useState<EditorialBatch>();
+  const [retrying, setRetrying] = useState(false);
+  const isQuickProject = Boolean(project && activeFormat);
+  const needsBatchStatus = Boolean(isQuickProject && !project.document.scenes.length);
+
+  useEffect(() => {
+    if (!selected || !needsBatchStatus) {
+      setBatch(undefined);
+      return;
+    }
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const read = async () => {
+      try {
+        const current = await request<EditorialBatch>(`/studio/projects/${selected}/editorial-batch`);
+        if (cancelled) return;
+        setBatch(current);
+        if (['queued', 'draft', 'review'].includes(current.state))
+          timer = setTimeout(() => { void read(); }, 15000);
+        if (current.state === 'ready') {
+          void mutateSelectedProject();
+          void mutateProjects();
+        }
+      } catch (cause) {
+        if (!cancelled) setBatch({ state: 'failed', message: errorText(cause) });
+      }
+    };
+    void read();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [mutateProjects, mutateSelectedProject, needsBatchStatus, request, selected]);
 
   async function suggest() {
     setSuggesting(true);
@@ -213,10 +291,16 @@ function QuickStudio() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void generate(topic, format, network, taco);
+    void generate(topic, format, network, taco, generationMode);
   }
 
-  async function generate(chosenTopic: string, chosenFormat: QuickFormat, chosenNetwork: QuickNetwork, chosenTaco: TacoType) {
+  async function generate(
+    chosenTopic: string,
+    chosenFormat: QuickFormat,
+    chosenNetwork: QuickNetwork,
+    chosenTaco: TacoType,
+    mode: 'batch' | 'immediate' = generationMode,
+  ) {
     const title = chosenTopic.trim();
     if (!title || working) return;
     setWorking(true);
@@ -243,9 +327,16 @@ function QuickStudio() {
           },
         }),
       });
-      await request<StudioProject>(path + '/generate', {
-        method: 'POST', body: JSON.stringify({ revision: prepared.revision, stage: 'quick' }),
-      });
+      if (mode === 'batch') {
+        const started = await request<EditorialBatch>(path + '/editorial-batch', {
+          method: 'POST', body: JSON.stringify({ revision: prepared.revision }),
+        });
+        setBatch(started);
+      } else {
+        await request<StudioProject>(path + '/generate', {
+          method: 'POST', body: JSON.stringify({ revision: prepared.revision, stage: 'quick' }),
+        });
+      }
       router.replace(`/studio?post=${initial.id}`, { scroll: false });
       setSuggestions(current => current && ({
         ...current,
@@ -256,6 +347,22 @@ function QuickStudio() {
       setError(errorText(cause));
     } finally {
       setWorking(false);
+    }
+  }
+
+  async function retryBatch() {
+    if (!project || retrying || batch?.state !== 'failed') return;
+    setRetrying(true);
+    setError('');
+    try {
+      const restarted = await request<EditorialBatch>(`/studio/projects/${project.id}/editorial-batch`, {
+        method: 'POST', body: JSON.stringify({ revision: project.revision }),
+      });
+      setBatch(restarted);
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setRetrying(false);
     }
   }
 
@@ -278,7 +385,7 @@ function QuickStudio() {
             </select>
           </label>
           <button className={styles.primary} type="submit" disabled={!topic.trim() || working}>
-            {working ? 'Gerando post…' : 'Gerar post'}
+            {working ? (generationMode === 'batch' ? 'Enviando para lote…' : 'Gerando post…') : generationMode === 'batch' ? 'Gerar em lote' : 'Gerar agora'}
           </button>
           <details>
             <summary>Rede, público, objetivo e TACO</summary>
@@ -291,7 +398,12 @@ function QuickStudio() {
               </select></label>
               <label>Público<input value={audience} maxLength={200} disabled={working} onChange={event => setAudience(event.target.value)} /></label>
               <label>Objetivo<input value={objective} maxLength={200} disabled={working} onChange={event => setObjective(event.target.value)} /></label>
+              <label>Geração<select value={generationMode} disabled={working} onChange={event => setGenerationMode(event.target.value as 'batch' | 'immediate')}>
+                <option value="batch">Em lote · qualidade máxima</option>
+                <option value="immediate">Agora · revisão acelerada</option>
+              </select></label>
             </div>
+            {generationMode === 'batch' && <p className={styles.batchHint}>Cada fase do lote pode levar até 24 horas. Você pode fechar a página e voltar depois.</p>}
           </details>
           {error && <p className={styles.error} role="alert">{error}</p>}
         </form>
@@ -324,19 +436,20 @@ function QuickStudio() {
             </>
           )}
         </section>
-        {projects.data?.some(item => item.document?.scenes.length && getQuickFormat(item.document.identity.visualStyle)) && (
+        {projects.data?.some(item => getQuickFormat(item.document?.identity.visualStyle || '')) && (
           <label className={styles.saved}>Posts salvos
             <select value={selected || ''} disabled={working} onChange={event => {
               router.replace(event.target.value ? `/studio?post=${event.target.value}` : '/studio', { scroll: false });
             }}>
               <option value="">Escolher um post</option>
-              {projects.data.filter(item => item.document?.scenes.length && getQuickFormat(item.document.identity.visualStyle))
+              {projects.data.filter(item => getQuickFormat(item.document?.identity.visualStyle || ''))
                 .map(item => <option key={item.id} value={item.id}>{item.title}</option>)}
             </select>
           </label>
         )}
         {selectedProject.error && <p role="alert" className={styles.error}>{selectedProject.error.message}</p>}
         {selected && selectedProject.isLoading && <p role="status">Abrindo post…</p>}
+        {project && activeFormat && batch && <BatchProgress batch={batch} retrying={retrying} onRetry={() => void retryBatch()} />}
         {project && activeFormat && <Review key={project.id} project={project} format={activeFormat}
           onSaved={saved => { void selectedProject.mutate(saved, { revalidate: false }); }} />}
       </div>
