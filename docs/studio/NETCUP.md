@@ -36,7 +36,7 @@ Antes de atualizar, rode o backup e preserve o valor anterior de `POSTIZ_IMAGE` 
 
 Faça a criação inicial do titular pelo loopback antes de abrir o virtual host. Use `python3 create-owner.py --email titular@example.org --organization CONFENGE`. O script valida o login e guarda a senha inicial em `private/.owner-bootstrap`. Depois de transferir a senha ao cofre do titular e confirmar a entrada, apague o arquivo temporário. `DISABLE_REGISTRATION=true` fecha o cadastro depois da primeira organização. O virtual host também bloqueia a rota pública de cadastro. Preserve contas existentes em atualizações.
 
-Use o virtual host `postiz.nginx.conf` do repositório com o certificado próprio e confirme a configuração com `nginx -t` antes de recarregar. A origem do host fica no Nginx existente e o único mapeamento do Compose é `127.0.0.1:18407`. O registro DNS do subdomínio aponta para a origem pela Cloudflare.
+Use o virtual host `postiz.nginx.conf` do repositório com o certificado próprio e confirme a configuração com `nginx -t` antes de recarregar. O log do Postiz exclui os parâmetros de URL e o proxy bloqueia a navegação nativa dos formulários de autenticação. O login da interface usa a API por JavaScript. A origem do host fica no Nginx existente e o único mapeamento do Compose é `127.0.0.1:18407`. O registro DNS do subdomínio aponta para a origem pela Cloudflare.
 
 PostgreSQL, Redis e Temporal usam redes e volumes exclusivos. O Temporal usa PostgreSQL para persistência e visibilidade. `STUDIO_MANUAL_ONLY=true` limita o único worker a uma atividade por vez e mantém as filas sociais e de e-mail inativas. A CPU e a memória de cada contêiner têm limites no Compose.
 
