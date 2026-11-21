@@ -244,7 +244,8 @@ function QuickStudio() {
   const [generationMode, setGenerationMode] = useState<'batch' | 'immediate'>('batch');
   const [suggesting, setSuggesting] = useState(false);
   const [suggestions, setSuggestions] = useState<QuickSuggestions>();
-  const [batch, setBatch] = useState<EditorialBatch>();
+  const [batchInfo, setBatchInfo] = useState<{ projectId: string; status: EditorialBatch }>();
+  const batch = batchInfo?.projectId === selected ? batchInfo?.status : undefined;
   const [batchAttempt, setBatchAttempt] = useState(0);
   const [batchStatusError, setBatchStatusError] = useState(false);
   const [retrying, setRetrying] = useState(false);
@@ -253,7 +254,6 @@ function QuickStudio() {
 
   useEffect(() => {
     if (!selected || !needsBatchStatus) {
-      setBatch(undefined);
       setBatchStatusError(false);
       return;
     }
@@ -264,7 +264,7 @@ function QuickStudio() {
         const current = await request<EditorialBatch>(`/studio/projects/${selected}/editorial-batch`);
         if (cancelled) return;
         setBatchStatusError(false);
-        setBatch(current);
+        setBatchInfo({ projectId: selected, status: current });
         if (['queued', 'draft', 'review'].includes(current.state))
           timer = setTimeout(() => { void read(); }, 15000);
         if (current.state === 'ready') {
@@ -342,7 +342,7 @@ function QuickStudio() {
         const started = await request<EditorialBatch>(path + '/editorial-batch', {
           method: 'POST', body: JSON.stringify({ revision: prepared.revision }),
         });
-        setBatch(started);
+        setBatchInfo({ projectId: initial.id, status: started });
         setBatchAttempt(attempt => attempt + 1);
       } else {
         await request<StudioProject>(path + '/generate', {
@@ -370,7 +370,7 @@ function QuickStudio() {
       const restarted = await request<EditorialBatch>(`/studio/projects/${project.id}/editorial-batch`, {
         method: 'POST', body: JSON.stringify({ revision: project.revision }),
       });
-      setBatch(restarted);
+      setBatchInfo({ projectId: project.id, status: restarted });
       setBatchAttempt(attempt => attempt + 1);
     } catch (cause) {
       setError(errorText(cause));
@@ -464,7 +464,7 @@ function QuickStudio() {
         {selected && selectedProject.isLoading && <p role="status">Abrindo post…</p>}
         {batchStatusError && <p role="status">Não foi possível consultar o lote. Vamos tentar novamente.</p>}
         {project && activeFormat && batch && <BatchProgress batch={batch} retrying={retrying || working} onRetry={() => void retryBatch()} />}
-        {project && activeFormat && <Review key={project.id} project={project} format={activeFormat}
+        {project && activeFormat && project.document.scenes.length > 0 && <Review key={project.id} project={project} format={activeFormat}
           onSaved={saved => { void selectedProject.mutate(saved, { revalidate: false }); }} />}
       </div>
     </main>

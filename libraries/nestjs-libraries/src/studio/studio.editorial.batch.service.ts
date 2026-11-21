@@ -130,7 +130,7 @@ export class StudioEditorialBatchService {
             if (job === correlation) return true;
             return (
               batch.metadata?.postiz_scope === stableScope &&
-              ['validating', 'in_progress', 'finalizing', 'cancelling'].includes(
+              ['validating', 'in_progress', 'finalizing'].includes(
                 batch.status
               )
             );
