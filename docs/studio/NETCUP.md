@@ -10,6 +10,8 @@ Escolha o tema e o formato na entrada do Estúdio. O carrossel tem quatro peças
 
 Para atualizar a aplicação a partir da imagem-base já instalada, `deploy/netcup/Dockerfile.editor-build` compila interface e API fora da Netcup e exporta os artefatos com `docker buildx build --output type=local,dest=<diretório>`. Use os argumentos públicos `NEXT_PUBLIC_BACKEND_URL` e `NEXT_PUBLIC_VERSION` abaixo. Transfira a pasta exportada e construa a imagem com `Dockerfile.editor-runtime`, apontando o contexto para os artefatos e passando `SOURCE_REVISION`. Preserve a imagem e o `.env` anteriores antes de atualizar a tag. As imagens e cores têm como referência o site da CONFENGE. A licença OFL acompanha Archivo.
 
+Instale os arquivos exportados em `brand/` no diretório `/var/www/postiz-confenge-brand/` com leitura para o Nginx. O virtual host serve esses arquivos também na tela de login. Valide a configuração e faça uma cópia do virtual host antes de recarregar.
+
 ## Conteúdo para publicação manual
 
 1. Crie um conteúdo e salve o tema, público, objetivo e a identidade. Você pode registrar a fonte diretamente no Estúdio.
