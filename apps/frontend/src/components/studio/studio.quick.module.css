@@ -72,7 +72,7 @@
 .form summary { color: var(--muted); cursor: pointer; width: fit-content; font-size: .87rem; }
 .details { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
 .batchHint { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: .83rem; }
-.root button {
+.root :is(button, a.download) {
   display: inline-flex;
   min-height: 44px;
   justify-content: center;
@@ -85,8 +85,8 @@
   font-size: .87rem;
   font-weight: 700;
 }
-.root button.primary { border-color: var(--ink); background: var(--ink); color: #fff; }
-.root button.primary:hover:not(:disabled) { background: #153453; }
+.root :is(button, a.download).primary { border-color: var(--ink); background: var(--ink); color: #fff; }
+.root :is(button, a.download).primary:hover:not(:disabled) { background: #153453; }
 .root button:disabled { opacity: .46; cursor: default; }
 .error { color: #9b3229; margin: 0; }
 .saved { margin: 16px 0; max-width: 430px; }
@@ -118,6 +118,7 @@
 .reviewHeader { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 18px; }
 .reviewHeader h2 { margin: 0 0 4px; font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 800; letter-spacing: -.03em; }
 .reviewHeader p, .editor p { margin: 0; color: var(--muted); font-size: .87rem; }
+.packageHint { margin: 0 0 14px; color: var(--muted); font-size: .87rem; }
 .reviewGrid { display: grid; grid-template-columns: minmax(250px, 1.16fr) minmax(255px, .84fr); align-items: start; gap: clamp(16px, 3vw, 36px); }
 .preview { display: grid; place-items: center; background: #e9efef; border: 1px solid var(--line); border-radius: 6px; padding: clamp(12px, 3vw, 28px); min-height: 250px; }
 .preview img { display: block; width: min(100%, 492px); height: auto; box-shadow: 0 6px 22px #061a3327; }

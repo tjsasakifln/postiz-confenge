@@ -21,15 +21,17 @@ interface EditorialBatch {
 const errorText = (error: unknown) =>
   error instanceof Error ? error.message : 'Não foi possível concluir a solicitação.';
 
-function download(blob: Blob, name: string) {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = name;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
+async function buildPackage(document: StudioDocument, format: QuickFormat) {
+  const images = await Promise.all(document.scenes.map((scene, index) => renderQuickCard(scene, index, format)));
+  const references = document.sources.map(source => `${source.title}\n${source.url}\n${source.excerpt}`);
+  const files: Record<string, Uint8Array> = {
+    'legenda.txt': strToU8(document.packages[0].description.trim() + '\n'),
+    'fontes.txt': strToU8((references.join('\n\n') || 'Sem fontes registradas para esta versão.') + '\n'),
+  };
+  for (const [index, blob] of images.entries()) {
+    files[`${String(index + 1).padStart(2, '0')}-confenge.png`] = new Uint8Array(await blob.arrayBuffer());
+  }
+  return new Blob([Uint8Array.from(zipSync(files, { level: 0 }))], { type: 'application/zip' });
 }
 
 function Review({ project, format, onSaved }: {
@@ -45,12 +47,33 @@ function Review({ project, format, onSaved }: {
   const [message, setMessage] = useState('');
   const [previewError, setPreviewError] = useState('');
   const [dirty, setDirty] = useState(false);
+  const [prepared, setPrepared] = useState<{ document: StudioDocument; url?: string; error?: string }>();
+  const [packageAttempt, setPackageAttempt] = useState(0);
   const { document } = draft;
   const scene = document.scenes[selected];
   const caption = document.packages[0]?.description ?? '';
   const taco = getQuickTaco(document.identity.visualStyle);
   const review = document.editorialNotes?.find(note => note.startsWith('Revisão crítica automatizada:'));
-  const valid = caption.trim() && document.scenes.every(item => item.visual.trim() && item.narration.trim());
+  const valid = Boolean(caption.trim() && document.scenes.length &&
+    document.scenes.every(item => item.visual.trim() && item.narration.trim()));
+  const currentPackage = !dirty && prepared?.document === document ? prepared : undefined;
+
+  useEffect(() => {
+    if (dirty || !valid) return;
+    let cancelled = false;
+    let url: string | undefined;
+    buildPackage(document, format).then(blob => {
+      if (cancelled) return;
+      url = URL.createObjectURL(blob);
+      setPrepared({ document, url });
+    }).catch(error => {
+      if (!cancelled) setPrepared({ document, error: errorText(error) });
+    });
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [dirty, document, format, packageAttempt, valid]);
 
   useEffect(() => {
     if (!scene) return;
@@ -83,34 +106,18 @@ function Review({ project, format, onSaved }: {
   }
 
   async function save() {
-    const saved = await request<StudioProject>(`/studio/projects/${draft.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ revision: draft.revision, title: draft.title, document }),
-    });
-    setDraft(saved);
-    onSaved(saved);
-    setDirty(false);
-  }
-
-  async function finish(exportFiles: boolean) {
-    if (!valid || busy) return;
+    if (!dirty || !valid || busy) return;
     setBusy(true);
     setMessage('');
     try {
-      if (dirty) await save();
-      if (exportFiles) {
-        const images = await Promise.all(document.scenes.map((item, index) => renderQuickCard(item, index, format)));
-        const files: Record<string, Uint8Array> = { 'legenda.txt': strToU8(caption.trim() + '\n') };
-        if (document.sources.length) {
-          files['fontes.txt'] = strToU8(document.sources.map(source =>
-            `${source.title}\n${source.url}\n${source.excerpt}`).join('\n\n') + '\n');
-        }
-        for (const [index, blob] of images.entries()) {
-          files[`${String(index + 1).padStart(2, '0')}-confenge.png`] = new Uint8Array(await blob.arrayBuffer());
-        }
-        download(new Blob([Uint8Array.from(zipSync(files, { level: 0 }))], { type: 'application/zip' }), 'post-confenge.zip');
-      }
-      setMessage(exportFiles ? 'Arquivo pronto para baixar.' : 'Revisão salva.');
+      const saved = await request<StudioProject>(`/studio/projects/${draft.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ revision: draft.revision, title: draft.title, document }),
+      });
+      setDraft(saved);
+      onSaved(saved);
+      setDirty(false);
+      setMessage('Revisão salva.');
     } catch (error) {
       setMessage(errorText(error));
     } finally {
@@ -126,10 +133,23 @@ function Review({ project, format, onSaved }: {
           <h2 id="quick-review">Revisar post</h2>
           <p>{taco ? `${tacoLabels[taco]} · ` : ''}{document.packages[0]?.platform === 'linkedin' ? 'LinkedIn' : 'Instagram'} · {quickFormats[format].label} · {quickFormats[format].width} × {quickFormats[format].height} px</p>
         </div>
-        <button className={styles.primary} onClick={() => void finish(true)} disabled={!valid || busy}>
-          Baixar pacote (.zip)
-        </button>
+        {currentPackage?.url ? (
+          <a className={`${styles.download} ${styles.primary}`} href={currentPackage.url} download="post-confenge.zip">
+            Baixar pacote (.zip)
+          </a>
+        ) : currentPackage?.error ? (
+          <button type="button" onClick={() => {
+            setPrepared(undefined);
+            setPackageAttempt(attempt => attempt + 1);
+          }}>Tentar preparar ZIP novamente</button>
+        ) : (
+          <button type="button" className={styles.primary} disabled>
+            {!valid || dirty ? 'Baixar pacote (.zip)' : 'Preparando ZIP…'}
+          </button>
+        )}
       </div>
+      {currentPackage?.error && <p className={styles.error} role="alert">{currentPackage.error}</p>}
+      {dirty && <p className={styles.packageHint} role="status">Salve a revisão para baixar a versão atualizada.</p>}
       <div className={styles.reviewGrid}>
         <div className={styles.preview}>
           {previewError ? <p role="alert">{previewError}</p> : preview
@@ -172,7 +192,7 @@ function Review({ project, format, onSaved }: {
             </ul>
           </details>}
           <div className={styles.actions}>
-            <button type="button" onClick={() => void finish(false)} disabled={!dirty || !valid || busy}>Salvar revisão</button>
+            <button type="button" onClick={() => void save()} disabled={!dirty || !valid || busy}>Salvar revisão</button>
             <button type="button" disabled={!caption.trim()} onClick={async () => {
               try {
                 await navigator.clipboard.writeText(caption);
