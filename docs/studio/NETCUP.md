@@ -30,7 +30,7 @@ Confira o ID local e o ID carregado com `docker image inspect --format '{{.Id}} 
 
 O diretório de operação é `/opt/postiz-confenge`. Copie os arquivos de `deploy/netcup` para ele e restrinja a pasta a root. O Compose desta pasta é autônomo. A combinação dos dois arquivos de exemplo instala serviços administrativos e publica portas adicionais, então serve somente para desenvolvimento.
 
-Na primeira instalação, execute `bash initialize-secrets.sh` no diretório de operação. Ele gera as senhas e o JWT dentro de `private/`. Mantenha esses arquivos no servidor, com modo `0600`. Grave `POSTIZ_IMAGE=postiz-confenge:SHA` em `.env`; a imagem deve estar carregada localmente.
+Na primeira instalação, execute `bash initialize-secrets.sh` no diretório de operação. Ele gera as senhas e o JWT dentro de `private/`. Mantenha esses arquivos no servidor, com modo `0600`. Grave `POSTIZ_IMAGE=postiz-confenge:SHA` em `.env`; a imagem deve estar carregada localmente. Antes de subir o Estúdio, rode `bash prepare-temporal.sh` para registrar os atributos de busca por ID compatíveis com a visibilidade SQL.
 
 Antes de atualizar, rode o backup e preserve o valor anterior de `POSTIZ_IMAGE` e as configurações efetivas. Use `docker compose config --quiet` para validar sem imprimir credenciais. Aplique com `docker compose up -d --wait`. A inicialização aplica o schema Prisma sem aceitar perda de dados e o PM2 supervisiona proxy interno, API, interface e worker.
 
