@@ -22,14 +22,14 @@ export const quickSources: StudioSource[] = [
     id: 'contratacao',
     title: 'Como contratar um serviço de engenharia',
     url: 'https://confenge.com.br/como-trabalhamos/',
-    excerpt: 'O atendimento começa pelo contexto e pelo recorte da necessidade. A proposta explicita o escopo. Documentação e referências sensíveis seguem por canal seguro combinado com o cliente.',
+    excerpt: 'O atendimento começa pelo contexto e pelo recorte da necessidade. A proposta identifica trabalho, disciplinas, entregas, prazos e responsabilidades. Mudanças de escopo são registradas e alinhadas com o contratante.',
     observedAt,
   },
   {
     id: 'documentos',
     title: 'Documentos para levantar quantitativos',
     url: 'https://confenge.com.br/conteudos/documentos-para-levantamento-quantitativos/',
-    excerpt: 'Plantas, memoriais e referências já existentes orientam o levantamento. A finalidade e o estágio do projeto definem quais critérios e premissas precisam ser explicitados.',
+    excerpt: 'Plantas, memoriais e referências já existentes orientam o levantamento. A finalidade e o estágio do projeto definem quais critérios e premissas precisam ser explicitados. Documentos sensíveis seguem pelo canal seguro indicado pela equipe.',
     observedAt,
   },
 ];
