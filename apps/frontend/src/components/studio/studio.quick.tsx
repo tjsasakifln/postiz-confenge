@@ -197,16 +197,17 @@ function BatchProgress({ batch, retrying, onRetry }: {
     draft: 'Estruturando o conteúdo com as fontes',
     review: 'Revisão editorial e adversarial em andamento',
   };
-  if (batch.state === 'ready' || batch.state === 'idle') return null;
-  if (batch.state === 'failed') {
+  if (batch.state === 'ready') return null;
+  if (batch.state === 'failed' || batch.state === 'idle') {
+    const waiting = batch.state === 'idle';
     return (
       <section className={styles.batch} aria-live="polite">
         <div>
-          <strong>A geração em lote não foi concluída.</strong>
-          <p>{batch.message || 'O post ficou preservado para nova tentativa.'}</p>
+          <strong>{waiting ? 'Tema salvo para geração' : 'A geração em lote não foi concluída.'}</strong>
+          <p>{batch.message || (waiting ? 'Envie este tema para o lote quando estiver pronto.' : 'O post ficou preservado para nova tentativa.')}</p>
         </div>
         <button type="button" onClick={onRetry} disabled={retrying}>
-          {retrying ? 'Reenviando…' : 'Tentar novamente'}
+          {retrying ? 'Enviando…' : waiting ? 'Iniciar lote' : 'Tentar novamente'}
         </button>
       </section>
     );
@@ -244,6 +245,8 @@ function QuickStudio() {
   const [suggesting, setSuggesting] = useState(false);
   const [suggestions, setSuggestions] = useState<QuickSuggestions>();
   const [batch, setBatch] = useState<EditorialBatch>();
+  const [batchAttempt, setBatchAttempt] = useState(0);
+  const [batchStatusError, setBatchStatusError] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const isQuickProject = Boolean(project && activeFormat);
   const needsBatchStatus = Boolean(isQuickProject && !project.document.scenes.length);
@@ -251,6 +254,7 @@ function QuickStudio() {
   useEffect(() => {
     if (!selected || !needsBatchStatus) {
       setBatch(undefined);
+      setBatchStatusError(false);
       return;
     }
     let cancelled = false;
@@ -259,6 +263,7 @@ function QuickStudio() {
       try {
         const current = await request<EditorialBatch>(`/studio/projects/${selected}/editorial-batch`);
         if (cancelled) return;
+        setBatchStatusError(false);
         setBatch(current);
         if (['queued', 'draft', 'review'].includes(current.state))
           timer = setTimeout(() => { void read(); }, 15000);
@@ -266,8 +271,10 @@ function QuickStudio() {
           void mutateSelectedProject();
           void mutateProjects();
         }
-      } catch (cause) {
-        if (!cancelled) setBatch({ state: 'failed', message: errorText(cause) });
+      } catch {
+        if (cancelled) return;
+        setBatchStatusError(true);
+        timer = setTimeout(() => { void read(); }, 15000);
       }
     };
     void read();
@@ -275,7 +282,7 @@ function QuickStudio() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [mutateProjects, mutateSelectedProject, needsBatchStatus, request, selected]);
+  }, [batchAttempt, mutateProjects, mutateSelectedProject, needsBatchStatus, request, selected]);
 
   async function suggest() {
     setSuggesting(true);
@@ -328,21 +335,24 @@ function QuickStudio() {
         }),
       });
       if (mode === 'batch') {
+        router.replace(`/studio?post=${initial.id}`, { scroll: false });
+        void projects.mutate();
         const started = await request<EditorialBatch>(path + '/editorial-batch', {
           method: 'POST', body: JSON.stringify({ revision: prepared.revision }),
         });
         setBatch(started);
+        setBatchAttempt(attempt => attempt + 1);
       } else {
         await request<StudioProject>(path + '/generate', {
           method: 'POST', body: JSON.stringify({ revision: prepared.revision, stage: 'quick' }),
         });
+        router.replace(`/studio?post=${initial.id}`, { scroll: false });
+        void projects.mutate();
       }
-      router.replace(`/studio?post=${initial.id}`, { scroll: false });
       setSuggestions(current => current && ({
         ...current,
         suggestions: current.suggestions.filter(item => item.topic !== title),
       }));
-      void projects.mutate();
     } catch (cause) {
       setError(errorText(cause));
     } finally {
@@ -351,7 +361,7 @@ function QuickStudio() {
   }
 
   async function retryBatch() {
-    if (!project || retrying || batch?.state !== 'failed') return;
+    if (!project || working || retrying || (batch?.state !== 'failed' && batch?.state !== 'idle')) return;
     setRetrying(true);
     setError('');
     try {
@@ -359,6 +369,7 @@ function QuickStudio() {
         method: 'POST', body: JSON.stringify({ revision: project.revision }),
       });
       setBatch(restarted);
+      setBatchAttempt(attempt => attempt + 1);
     } catch (cause) {
       setError(errorText(cause));
     } finally {
@@ -449,7 +460,8 @@ function QuickStudio() {
         )}
         {selectedProject.error && <p role="alert" className={styles.error}>{selectedProject.error.message}</p>}
         {selected && selectedProject.isLoading && <p role="status">Abrindo post…</p>}
-        {project && activeFormat && batch && <BatchProgress batch={batch} retrying={retrying} onRetry={() => void retryBatch()} />}
+        {batchStatusError && <p role="status">Não foi possível consultar o lote. Vamos tentar novamente.</p>}
+        {project && activeFormat && batch && <BatchProgress batch={batch} retrying={retrying || working} onRetry={() => void retryBatch()} />}
         {project && activeFormat && <Review key={project.id} project={project} format={activeFormat}
           onSaved={saved => { void selectedProject.mutate(saved, { revalidate: false }); }} />}
       </div>
