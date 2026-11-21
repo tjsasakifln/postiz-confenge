@@ -21,6 +21,7 @@ docker build -f Dockerfile.dev \
   --build-arg SOURCE_REVISION="$rev" \
   --build-arg NEXT_PUBLIC_VERSION="${rev:0:12}" \
   --build-arg NEXT_PUBLIC_BACKEND_URL=https://postiz.confenge.com.br/api \
+  --build-arg STORAGE_PROVIDER=local \
   -t "postiz-confenge:$rev" .
 docker save "postiz-confenge:$rev" | gzip -1 | ssh ec-prod 'docker load'
 ```
@@ -33,7 +34,7 @@ Na primeira instalação, execute `bash initialize-secrets.sh` no diretório de 
 
 Antes de atualizar, rode o backup e preserve o valor anterior de `POSTIZ_IMAGE` e as configurações efetivas. Use `docker compose config --quiet` para validar sem imprimir credenciais. Aplique com `docker compose up -d --wait`. A inicialização aplica o schema Prisma sem aceitar perda de dados e o PM2 supervisiona proxy interno, API, interface e worker.
 
-Faça a criação inicial do titular pelo loopback antes de abrir o virtual host. `DISABLE_REGISTRATION=true` fecha o cadastro depois da primeira organização. O virtual host também bloqueia a rota pública de cadastro. Preserve contas existentes em atualizações.
+Faça a criação inicial do titular pelo loopback antes de abrir o virtual host. Use `python3 create-owner.py --email titular@example.org --organization CONFENGE`. O script valida o login e guarda a senha inicial em `private/.owner-bootstrap`. Depois de transferir a senha ao cofre do titular e confirmar a entrada, apague o arquivo temporário. `DISABLE_REGISTRATION=true` fecha o cadastro depois da primeira organização. O virtual host também bloqueia a rota pública de cadastro. Preserve contas existentes em atualizações.
 
 Use o virtual host `postiz.nginx.conf` do repositório com o certificado próprio e confirme a configuração com `nginx -t` antes de recarregar. A origem do host fica no Nginx existente e o único mapeamento do Compose é `127.0.0.1:18407`. O registro DNS do subdomínio aponta para a origem pela Cloudflare.
 
