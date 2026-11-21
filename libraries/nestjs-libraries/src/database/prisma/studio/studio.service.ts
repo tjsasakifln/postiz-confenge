@@ -161,6 +161,10 @@ export class StudioService {
     );
   }
 
+  async suggestQuick(org: string) {
+    return this.writer.suggestQuick(await this.list(org));
+  }
+
   async get(org: string, id: string): Promise<StudioProject> {
     const row = await this.repository.get(org, id);
     if (!row) throw new NotFoundException('Projeto não encontrado.');

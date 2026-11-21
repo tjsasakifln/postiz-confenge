@@ -20,6 +20,59 @@ body * {
   outline: none !important;
 }
 
+@font-face {
+  font-family: "CONFENGE UI";
+  src: url("../../public/confenge-studio/archivo.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root body[data-confenge] {
+  font-family: "CONFENGE UI", Arial, sans-serif;
+  --new-btn-primary: #2d6f2d;
+  --new-ai-btn: #2d6f2d;
+  --new-table-text-focused: #2d6f2d;
+  --color-forth: #2d6f2d;
+  --color-seventh: #3d8238;
+  --color-custom4: #2d6f2d;
+  --color-custom7: #3d8238;
+  --color-custom30: #2d6f2d;
+}
+
+:root body[data-confenge].dark {
+  --new-bgColor: #031020;
+  --new-bgColorInner: #061a33;
+  --new-bgLineColor: #112842;
+  --new-table-border: #23405d;
+  --new-table-header: #0a294b;
+  --new-btn-simple: #173551;
+  --new-box-hover: #112b46;
+  --new-textItemBlur: #a7bacd;
+  --new-table-text-focused: #ced62a;
+  --color-primary: #031020;
+  --color-secondary: #061a33;
+  --color-third: #0a294b;
+}
+
+.confenge-auth {
+  background: radial-gradient(ellipse at 30% 0%, #173b61, #031020 66%);
+}
+.confenge-auth-panel {
+  border: 1px solid #355471;
+  border-top: 4px solid #ced62a;
+  background: #061a33;
+  border-radius: 9px;
+}
+.confenge-wordmark {
+  width: 220px;
+  max-width: 100%;
+  height: auto;
+}
+:root body[data-confenge] :is(button, a, input, textarea, select, summary):focus-visible {
+  outline: 2px solid #78985b !important;
+  outline-offset: 2px;
+}
+
 .box {
   position: relative;
 }

@@ -49,6 +49,11 @@ export class StudioController {
     return this.studio.list(org.id);
   }
 
+  @Post('/suggestions')
+  suggestions(@GetOrgFromRequest() org: Organization) {
+    return this.studio.suggestQuick(org.id);
+  }
+
   @Post('/projects')
   create(
     @GetOrgFromRequest() org: Organization,

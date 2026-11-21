@@ -4,6 +4,21 @@ export const quickFormats = {
 } as const;
 
 export type QuickFormat = keyof typeof quickFormats;
+export const quickNetworks = { instagram: 'Instagram', linkedin: 'LinkedIn' } as const;
+export type QuickNetwork = keyof typeof quickNetworks;
+
+export interface QuickSuggestion {
+  topic: string;
+  format: QuickFormat;
+  network: QuickNetwork;
+  reason: string;
+}
+
+export interface QuickSuggestions {
+  suggestions: QuickSuggestion[];
+  projects: number;
+  published: number;
+}
 
 export const quickStyle = (format: QuickFormat) =>
   `Estúdio CONFENGE · ${quickFormats[format].label}`;

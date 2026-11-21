@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { strToU8, zipSync } from 'fflate';
-import { getQuickFormat, quickFormats, quickStyle, type QuickFormat } from '@gitroom/helpers/studio/studio.quick';
+import { getQuickFormat, quickFormats, quickStyle, quickNetworks, type QuickFormat, type QuickNetwork, type QuickSuggestions } from '@gitroom/helpers/studio/studio.quick';
 import type { StudioDocument, StudioProject } from '@gitroom/helpers/studio/studio.types';
 import { useStudioProject, useStudioProjects, useStudioRequest } from './studio.hooks';
 import { renderQuickCard } from './studio.quick.cards';
@@ -106,10 +106,10 @@ function Review({ project, format, onSaved }: {
       <div className={styles.reviewHeader}>
         <div>
           <h2 id="quick-review">Revisar post</h2>
-          <p>{quickFormats[format].label} · {quickFormats[format].width} × {quickFormats[format].height} px</p>
+          <p>{document.packages[0]?.platform === 'linkedin' ? 'LinkedIn' : 'Instagram'} · {quickFormats[format].label} · {quickFormats[format].width} × {quickFormats[format].height} px</p>
         </div>
         <button className={styles.primary} onClick={() => void finish(true)} disabled={!valid || busy}>
-          Baixar post (.zip)
+          Baixar pacote (.zip)
         </button>
       </div>
       <div className={styles.reviewGrid}>
@@ -172,19 +172,38 @@ function QuickStudio() {
   const activeFormat = project && getQuickFormat(project.document.identity.visualStyle);
   const [topic, setTopic] = useState('');
   const [format, setFormat] = useState<QuickFormat>('carousel');
+  const [network, setNetwork] = useState<QuickNetwork>('instagram');
   const [audience, setAudience] = useState('Gestores e responsáveis por obras');
   const [objective, setObjective] = useState('Orientar uma decisão prática de obra');
   const [error, setError] = useState('');
   const [working, setWorking] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestions, setSuggestions] = useState<QuickSuggestions>();
 
-  async function generate(event: FormEvent<HTMLFormElement>) {
+  async function suggest() {
+    setSuggesting(true);
+    setError('');
+    try {
+      setSuggestions(await request<QuickSuggestions>('/studio/suggestions', { method: 'POST' }));
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const title = topic.trim();
+    void generate(topic, format, network);
+  }
+
+  async function generate(chosenTopic: string, chosenFormat: QuickFormat, chosenNetwork: QuickNetwork) {
+    const title = chosenTopic.trim();
     if (!title || working) return;
     setWorking(true);
     setError('');
     try {
-      const brief = `Tema: ${title}. Público: ${audience}. Objetivo: ${objective}.`;
+      const brief = `Tema: ${title}. Público: ${audience}. Objetivo: ${objective}. Rede: ${quickNetworks[chosenNetwork]}.`;
       const initial = await request<StudioProject>('/studio/projects', {
         method: 'POST', body: JSON.stringify({ title, brief }),
       });
@@ -197,9 +216,10 @@ function QuickStudio() {
             ...initial.document, topic: title,
             identity: {
               audience, positioning: 'Engenharia CONFENGE', tone: 'Técnico e direto',
-              visualStyle: quickStyle(format), evidence: [], hypotheses: [],
+              visualStyle: quickStyle(chosenFormat), evidence: [], hypotheses: [],
               brandName: 'CONFENGE', language: 'pt-BR',
               primaryColor: '#061a33', secondaryColor: '#ced62a',
+              channel: { platform: chosenNetwork },
             },
           },
         }),
@@ -208,6 +228,7 @@ function QuickStudio() {
         method: 'POST', body: JSON.stringify({ revision: prepared.revision, stage: 'quick' }),
       });
       router.replace(`/studio?post=${initial.id}`, { scroll: false });
+      setSuggestions(undefined);
       void projects.mutate();
     } catch (cause) {
       setError(errorText(cause));
@@ -224,7 +245,7 @@ function QuickStudio() {
       </header>
       <div className={styles.content}>
         <h1>Criar post</h1>
-        <form onSubmit={generate} className={styles.form}>
+        <form onSubmit={submit} className={styles.form}>
           <label className={styles.theme}>Tema
             <input value={topic} maxLength={200} required onChange={event => setTopic(event.target.value)}
               placeholder="Ex. O que conferir antes de comparar orçamentos de obra" disabled={working} />
@@ -238,14 +259,45 @@ function QuickStudio() {
             {working ? 'Gerando post…' : 'Gerar post'}
           </button>
           <details>
-            <summary>Público e objetivo</summary>
+            <summary>Rede, público e objetivo</summary>
             <div className={styles.details}>
+              <label>Rede<select value={network} disabled={working} onChange={event => setNetwork(event.target.value as QuickNetwork)}>
+                {(Object.keys(quickNetworks) as QuickNetwork[]).map(key => <option value={key} key={key}>{quickNetworks[key]}</option>)}
+              </select></label>
               <label>Público<input value={audience} maxLength={200} disabled={working} onChange={event => setAudience(event.target.value)} /></label>
               <label>Objetivo<input value={objective} maxLength={200} disabled={working} onChange={event => setObjective(event.target.value)} /></label>
             </div>
           </details>
           {error && <p className={styles.error} role="alert">{error}</p>}
         </form>
+        <section className={styles.suggestions} aria-labelledby="quick-suggestions">
+          <div className={styles.reviewHeader}>
+            <h2 id="quick-suggestions">Sugestões de post</h2>
+            <button type="button" disabled={working || suggesting} onClick={() => void suggest()}>
+              {suggesting ? 'Lendo histórico…' : 'Sugerir com base no histórico'}
+            </button>
+          </div>
+          {suggestions && (
+            <>
+              <p className={styles.history}>{suggestions.projects} conteúdos do histórico · {suggestions.published} com publicação registrada. Recomendações editoriais.</p>
+              <div className={styles.suggestionList}>
+                {suggestions.suggestions.map(item => (
+                  <article key={item.topic}>
+                    <p>{quickNetworks[item.network]} · {quickFormats[item.format].label}</p>
+                    <h3>{item.topic}</h3>
+                    <p>{item.reason}</p>
+                    <button type="button" className={styles.primary} disabled={working} onClick={() => {
+                      setTopic(item.topic);
+                      setFormat(item.format);
+                      setNetwork(item.network);
+                      void generate(item.topic, item.format, item.network);
+                    }}>Aprovar e gerar</button>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
         {projects.data?.some(item => item.document?.scenes.length && getQuickFormat(item.document.identity.visualStyle)) && (
           <label className={styles.saved}>Posts salvos
             <select value={selected || ''} disabled={working} onChange={event => {

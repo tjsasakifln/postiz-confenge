@@ -53,10 +53,10 @@
 }
 .root textarea { resize: vertical; }
 .root :is(input, select, textarea, button, a, summary):focus-visible {
-  outline: 2px solid #2d6f2d;
+  outline: 2px solid #2d6f2d !important;
   outline-offset: 3px;
 }
-.form, .review {
+.form, .review, .suggestions {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -90,6 +90,15 @@
 .error { color: #9b3229; margin: 0; }
 .saved { margin: 16px 0; max-width: 430px; }
 .review { margin-top: 24px; }
+.suggestions { margin-top: 18px; }
+.suggestions .reviewHeader { margin-bottom: 0; }
+.suggestions .reviewHeader h2 { font-size: 1.2rem; margin: 0; }
+.history { font-size: .86rem; color: var(--muted); margin: 12px 0; }
+.suggestionList { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.suggestionList article { padding: 16px; border: 1px solid var(--line); border-radius: 6px; }
+.suggestionList h3 { font-size: 1.17rem; font-weight: 780; margin: 8px 0; }
+.suggestionList p { font-size: .9rem; color: var(--muted); }
+.suggestionList button { margin-top: 14px; }
 .reviewHeader { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 18px; }
 .reviewHeader h2 { margin: 0 0 4px; font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 800; letter-spacing: -.03em; }
 .reviewHeader p, .editor p { margin: 0; color: var(--muted); font-size: .87rem; }
@@ -101,7 +110,7 @@
 .cards button[aria-pressed="true"] { border-color: var(--ink); background: var(--lime); }
 
 @media (max-width: 820px) {
-  .form, .reviewGrid { grid-template-columns: 1fr; }
+  .form, .reviewGrid, .suggestionList { grid-template-columns: 1fr; }
   .reviewHeader { flex-wrap: wrap; }
   .header img { width: 120px; }
 }
