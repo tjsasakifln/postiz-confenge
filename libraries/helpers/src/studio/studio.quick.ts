@@ -39,5 +39,5 @@ export const getQuickFormat = (style: string): QuickFormat | undefined =>
 
 export const getQuickTaco = (style: string): TacoType | undefined => {
   const format = getQuickFormat(style);
-  return format && tacoOrder.find(taco => style === quickStyle(format, taco));
+  return format ? tacoOrder.find(taco => style === quickStyle(format, taco)) : undefined;
 };
