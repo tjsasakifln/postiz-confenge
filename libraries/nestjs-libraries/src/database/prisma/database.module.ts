@@ -60,6 +60,8 @@ import { StudioWriterService } from '@gitroom/nestjs-libraries/studio/studio.wri
 import { StudioProductionService } from '@gitroom/nestjs-libraries/studio/studio.production.service';
 import { StudioResearchService } from '@gitroom/nestjs-libraries/studio/studio.research.service';
 import { StudioProductionManager } from '@gitroom/nestjs-libraries/studio/studio.production.manager';
+import { StudioEditorialBatchService } from '@gitroom/nestjs-libraries/studio/studio.editorial.batch.service';
+import { StudioEditorialBatchManager } from '@gitroom/nestjs-libraries/studio/studio.editorial.batch.manager';
 
 @Global()
 @Module({
@@ -72,6 +74,8 @@ import { StudioProductionManager } from '@gitroom/nestjs-libraries/studio/studio
     StudioProductionService,
     StudioResearchService,
     StudioProductionManager,
+    StudioEditorialBatchService,
+    StudioEditorialBatchManager,
     PrismaService,
     PrismaRepository,
     PrismaTransaction,

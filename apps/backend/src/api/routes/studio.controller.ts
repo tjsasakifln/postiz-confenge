@@ -21,6 +21,8 @@ import {
   StudioOutcomeDto,
   StudioUpdateDto,
 } from '@gitroom/nestjs-libraries/dtos/studio/studio.dto';
+import { StudioEditorialBatchStartDto } from '@gitroom/nestjs-libraries/dtos/studio/studio.editorial.batch.dto';
+import { StudioEditorialBatchManager } from '@gitroom/nestjs-libraries/studio/studio.editorial.batch.manager';
 import { CheckPolicies } from '@gitroom/backend/services/auth/permissions/permissions.ability';
 import {
   AuthorizationActions,
@@ -37,7 +39,10 @@ import {
   })
 )
 export class StudioController {
-  constructor(private readonly studio: StudioService) {}
+  constructor(
+    private readonly studio: StudioService,
+    private readonly editorialBatch: StudioEditorialBatchManager
+  ) {}
 
   @Get('/capabilities')
   capabilities(@GetOrgFromRequest() org: Organization) {
@@ -95,6 +100,24 @@ export class StudioController {
     @Body() body: StudioGenerateDto
   ) {
     return this.studio.generate(org.id, id, body, user.id);
+  }
+
+  @Post('/projects/:id/editorial-batch')
+  editorialBatchStart(
+    @GetOrgFromRequest() org: Organization,
+    @GetUserFromRequest() user: User,
+    @Param('id') id: string,
+    @Body() body: StudioEditorialBatchStartDto
+  ) {
+    return this.editorialBatch.start(org.id, id, body.revision, user.id);
+  }
+
+  @Get('/projects/:id/editorial-batch')
+  editorialBatchStatus(
+    @GetOrgFromRequest() org: Organization,
+    @Param('id') id: string
+  ) {
+    return this.editorialBatch.status(org.id, id);
   }
 
   @Post('/projects/:id/approve')
