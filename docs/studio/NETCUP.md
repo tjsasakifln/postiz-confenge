@@ -2,6 +2,14 @@
 
 O endereço da operação é [postiz.confenge.com.br/studio](https://postiz.confenge.com.br/studio). O ambiente atende a uma única organização. O proxy exige uma sessão do Postiz para qualquer arquivo em `/uploads/`.
 
+## Criar e revisar na mesma tela
+
+Escolha o tema e o formato na entrada do Estúdio. O carrossel tem quatro peças de 1080 × 1350 px e o post quadrado tem uma peça de 1080 × 1080 px. A tela aplica o logotipo, a tipografia Archivo e a paleta do site. Rede, público e objetivo têm valores iniciais editáveis.
+
+**Sugerir com base no histórico** analisa até 12 conteúdos recentes do Estúdio e propõe temas, formatos e redes entre Instagram e LinkedIn. O histórico distingue registro de publicação de conteúdo preparado. **Aprovar e gerar** cria uma peça revisável. Na prévia, edite a legenda e o texto de cada imagem. **Baixar pacote** salva a revisão e exporta PNGs numerados e legenda no mesmo ZIP. Use **Estúdio avançado** para vídeo, mídias e os fluxos anteriores.
+
+Para atualizar a aplicação a partir da imagem-base já instalada, `deploy/netcup/Dockerfile.editor-build` compila interface e API fora da Netcup e exporta os artefatos com `docker buildx build --output type=local,dest=<diretório>`. Use os argumentos públicos `NEXT_PUBLIC_BACKEND_URL` e `NEXT_PUBLIC_VERSION` abaixo. Transfira a pasta exportada e construa a imagem com `Dockerfile.editor-runtime`, apontando o contexto para os artefatos e passando `SOURCE_REVISION`. Preserve a imagem e o `.env` anteriores antes de atualizar a tag. As imagens e cores têm como referência o site da CONFENGE. A licença OFL acompanha Archivo.
+
 ## Conteúdo para publicação manual
 
 1. Crie um conteúdo e salve o tema, público, objetivo e a identidade. Você pode registrar a fonte diretamente no Estúdio.
