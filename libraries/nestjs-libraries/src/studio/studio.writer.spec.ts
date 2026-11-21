@@ -2,6 +2,8 @@ import 'reflect-metadata';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { StudioWriterService } from './studio.writer.service';
 import type { StudioDocument } from '@gitroom/helpers/studio/studio.types';
+import { quickStyle, tacoOrder } from '@gitroom/helpers/studio/studio.quick';
+import { quickSources } from './studio.quick.sources';
 
 const fake = vi.hoisted(() => ({ create: vi.fn() }));
 vi.mock('openai', () => ({
@@ -38,6 +40,71 @@ const document = (): StudioDocument => ({
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
+});
+
+describe('TACO and reviewed image posts', () => {
+  const reply = (value: unknown) => ({
+    choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(value) } }],
+  });
+
+  it('starts after the most recent completed TACO axis', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
+    const previous = document();
+    previous.identity.visualStyle = quickStyle('square', 'T');
+    previous.topic = 'Revisões de planta';
+    previous.scenes = [{ id: '1', narration: 'Texto', visual: 'Título', kind: 'card', durationSeconds: 5, sourceIds: [] }];
+    fake.create.mockResolvedValue(reply({ items: tacoOrder.map(taco => ({
+      topic: `Pauta ${taco}`, network: 'linkedin', format: 'square', reference: 0, angle: 'Próxima decisão de projeto.',
+    })) }));
+    const result = await new StudioWriterService().suggestQuick([{
+      id: '1', createdAt: '2026-11-21', document: previous, publications: [],
+    } as Parameters<StudioWriterService['suggestQuick']>[0][number]]);
+    expect(result.suggestions.map(item => item.taco)).toEqual(['A', 'C', 'O', 'T']);
+    expect(result.suggestions[0].reason).toContain(previous.topic);
+    expect(result.published).toBe(0);
+  });
+
+  it('keeps the independently reviewed text with source IDs per card', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
+    const original = document();
+    original.identity.visualStyle = quickStyle('square', 'T');
+    const writer = new StudioWriterService();
+    const first = { cards: [{ headline: 'Compare', body: 'Texto inicial' }], caption: 'Legenda' };
+    const reviewed = {
+      cards: [{ headline: 'Confira a revisão', body: 'Compare o mesmo escopo.', sourceIds: ['quantitativos'] }],
+      caption: 'Use os documentos disponíveis.', captionSourceIds: ['documentos'], review: 'Revisões e escopo conferidos.',
+    };
+    fake.create.mockResolvedValueOnce(reply(first)).mockResolvedValueOnce(reply(reviewed));
+    const generated = await writer.generate('quick', original);
+    expect(generated.scenes[0].visual).toBe('Confira a revisão');
+    expect(generated.scenes[0].sourceIds).toEqual(['quantitativos']);
+    expect(generated.sources.map(source => source.id)).toEqual(['quantitativos', 'documentos']);
+
+    fake.create.mockResolvedValueOnce(reply(first)).mockResolvedValueOnce(reply({ ...reviewed, captionSourceIds: ['inventada'] }));
+    await expect(writer.generate('quick', original)).rejects.toThrow('incompleto');
+    fake.create.mockResolvedValueOnce(reply(first)).mockRejectedValueOnce(new Error('provider unavailable'));
+    await expect(writer.generate('quick', original)).rejects.toThrow('revisão crítica');
+    expect(original.scenes).toEqual([]);
+  });
+
+  it('rejects unsupported edits and records approval only after a new critical review', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
+    const edited = document();
+    edited.identity.visualStyle = quickStyle('square', 'A');
+    edited.sources = [quickSources[1]];
+    edited.scenes = [{ id: '1', narration: 'Exemplo', visual: 'Entrega', kind: 'card', durationSeconds: 5, sourceIds: ['entregas'] }];
+    edited.packages = [{
+      platform: 'linkedin', title: 'Entrega', description: 'Exemplo demonstrativo', cta: '',
+      landingUrl: '', hashtags: [], utmSource: '', utmMedium: '', utmCampaign: '', mediaIds: [],
+    }];
+    const writer = new StudioWriterService();
+    fake.create.mockResolvedValueOnce(reply({ accepted: false, reason: 'A alegação exige comprovação.' }));
+    await expect(writer.verifyQuickEdits(edited)).rejects.toThrow('exige comprovação');
+    expect(edited.editorialNotes).toBeUndefined();
+    fake.create.mockResolvedValueOnce(reply({ accepted: true, reason: 'Exemplo identificado como demonstração.' }));
+    await writer.verifyQuickEdits(edited);
+    expect(edited.editorialNotes).toEqual(['Revisão crítica automatizada: Exemplo identificado como demonstração.']);
+  });
 });
 
 describe('Studio writer evidence and deterministic editorial scores', () => {
