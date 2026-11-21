@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { strToU8, zipSync } from 'fflate';
 import { getQuickFormat, getQuickTaco, quickFormats, quickStyle, quickNetworks, tacoLabels, tacoOrder, type TacoType, type QuickFormat, type QuickNetwork, type QuickSuggestions } from '@gitroom/helpers/studio/studio.quick';
-import type { StudioDocument, StudioProject } from '@gitroom/helpers/studio/studio.types';
+import type { StudioDocument, StudioProject, StudioSource } from '@gitroom/helpers/studio/studio.types';
 import { useStudioProject, useStudioProjects, useStudioRequest } from './studio.hooks';
 import { renderQuickCard } from './studio.quick.cards';
 import { Studio } from './studio.component';
@@ -307,6 +307,7 @@ function QuickStudio() {
     chosenNetwork: QuickNetwork,
     chosenTaco: TacoType,
     mode: 'batch' | 'immediate' = generationMode,
+    chosenSource?: StudioSource,
   ) {
     const title = chosenTopic.trim();
     if (!title || working) return;
@@ -324,6 +325,7 @@ function QuickStudio() {
           revision: initial.revision, title,
           document: {
             ...initial.document, topic: title,
+            sources: chosenSource ? [chosenSource] : [],
             identity: {
               audience, positioning: 'Engenharia CONFENGE', tone: 'Técnico e direto',
               visualStyle: quickStyle(chosenFormat, chosenTaco), evidence: [], hypotheses: [],
@@ -439,7 +441,7 @@ function QuickStudio() {
                       setFormat(item.format);
                       setNetwork(item.network);
                       setTaco(item.taco);
-                      void generate(item.topic, item.format, item.network, item.taco);
+                      void generate(item.topic, item.format, item.network, item.taco, generationMode, item.source);
                     }}>Aprovar e gerar</button>
                   </article>
                 ))}

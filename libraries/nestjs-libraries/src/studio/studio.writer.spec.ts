@@ -63,6 +63,7 @@ describe('TACO and reviewed image posts', () => {
     expect(result.suggestions.map(item => item.taco)).toEqual(['A', 'C', 'O', 'T']);
     expect(result.suggestions[0].reason).toContain(previous.topic);
     expect(result.suggestions[0].reason).toContain('Quadro de equalização de propostas de obra');
+    expect(result.suggestions[0].source?.id).toBe('equalizacao');
     expect(fake.create).toHaveBeenCalledTimes(2);
     expect(result.published).toBe(0);
   });
@@ -104,6 +105,16 @@ describe('TACO and reviewed image posts', () => {
     fake.create.mockResolvedValueOnce(reply({ unsupported: true }));
     await expect(new StudioWriterService().generate('quick', original)).rejects.toThrow('tema ainda não tem uma fonte concreta');
     expect(fake.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the source approved in a recommendation through drafting and review', () => {
+    const original = document();
+    original.identity.visualStyle = quickStyle('carousel', 'O');
+    original.sources = [quickSources.find(source => source.id === 'escopo-parcial')!];
+    const writer = new StudioWriterService();
+    expect(writer.quickDraftRequest(original).payload.sources.map(source => source.id)).toEqual(['escopo-parcial']);
+    expect(() => writer.quickReviewRequest(original, { sourceId: 'equalizacao' }))
+      .toThrow('não usou a fonte aprovada');
   });
 
   it('rejects unsupported edits and records approval only after a new critical review', async () => {

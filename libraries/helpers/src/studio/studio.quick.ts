@@ -21,6 +21,7 @@ export interface QuickSuggestion {
   network: QuickNetwork;
   taco: TacoType;
   reason: string;
+  source?: StudioSource;
 }
 
 export interface QuickSuggestions {
@@ -41,3 +42,5 @@ export const getQuickTaco = (style: string): TacoType | undefined => {
   const format = getQuickFormat(style);
   return format ? tacoOrder.find(taco => style === quickStyle(format, taco)) : undefined;
 };
+import type { StudioSource } from './studio.types';
+
