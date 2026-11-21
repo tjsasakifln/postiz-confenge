@@ -6,10 +6,9 @@ ENV NEXT_PUBLIC_VERSION=$NEXT_PUBLIC_VERSION \
     NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL \
     STORAGE_PROVIDER=local \
     NEXT_TELEMETRY_DISABLED=1
-COPY package.json pnpm-lock.yaml /app/
-RUN pnpm install --frozen-lockfile --ignore-scripts
 COPY . /app
-RUN pnpm exec prisma generate --schema ./libraries/nestjs-libraries/src/database/prisma/schema.prisma
+RUN test -d node_modules/.pnpm/fflate@0.8.2/node_modules/fflate \
+ && ln -s .pnpm/fflate@0.8.2/node_modules/fflate node_modules/fflate
 RUN NODE_OPTIONS=--max-old-space-size=6144 pnpm run build:backend \
  && NODE_OPTIONS=--max-old-space-size=6144 pnpm run build:frontend
 RUN rm -rf apps/frontend/.next/cache \

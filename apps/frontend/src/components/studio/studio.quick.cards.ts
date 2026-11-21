@@ -25,7 +25,8 @@ async function loadBrand() {
     loadImage('logo.png'), loadImage('logo-white.png'), loadImage('obra.jpg'),
     type.load(),
   ]);
-  document.fonts.add(type);
+  const fonts = document.fonts as FontFaceSet & { add(face: FontFace): FontFaceSet };
+  fonts.add(type);
   return { logo, white, photo };
 }
 
