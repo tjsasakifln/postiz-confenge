@@ -55,14 +55,14 @@ describe('TACO and reviewed image posts', () => {
     previous.scenes = [{ id: '1', narration: 'Texto', visual: 'Título', kind: 'card', durationSeconds: 5, sourceIds: [] }];
     fake.create.mockResolvedValue(reply({ items: tacoOrder.map(taco => ({
       topic: `Pauta ${taco}`, network: 'linkedin', format: 'square', reference: 0, angle: 'Próxima decisão de projeto.',
-      sourceId: 'quantitativos',
+      sourceId: 'equalizacao',
     })) }));
     const result = await new StudioWriterService().suggestQuick([{
       id: '1', createdAt: '2026-11-21', document: previous, publications: [],
     } as Parameters<StudioWriterService['suggestQuick']>[0][number]]);
     expect(result.suggestions.map(item => item.taco)).toEqual(['A', 'C', 'O', 'T']);
     expect(result.suggestions[0].reason).toContain(previous.topic);
-    expect(result.suggestions[0].reason).toContain('Quantitativos e orçamento de obras');
+    expect(result.suggestions[0].reason).toContain('Quadro de equalização de propostas de obra');
     expect(fake.create).toHaveBeenCalledTimes(2);
     expect(result.published).toBe(0);
   });
@@ -72,22 +72,38 @@ describe('TACO and reviewed image posts', () => {
     const original = document();
     original.identity.visualStyle = quickStyle('square', 'T');
     const writer = new StudioWriterService();
-    const first = { cards: [{ headline: 'Compare', body: 'Texto inicial' }], caption: 'Legenda' };
+    const first = { sourceId: 'banheiro-r01', cards: [{ headline: 'Compare', body: 'Texto inicial' }], caption: 'Legenda' };
     const reviewed = {
-      cards: [{ headline: 'Confira a revisão', body: 'Compare o mesmo escopo.', sourceIds: ['quantitativos'] }],
-      caption: 'Use os documentos disponíveis.', captionSourceIds: ['documentos'], review: 'Revisões e escopo conferidos.',
+      accepted: true,
+      cards: [{ headline: 'O que muda com o desconto dos vãos?', body: 'Na R01 didática: 21,84 m² brutos menos porta e janela = 19,60 m².' }],
+      caption: 'Confira a memória no demonstrativo de banheiro da CONFENGE.',
+      review: 'Revisões e quantidade conferidas.',
     };
     fake.create.mockResolvedValueOnce(reply(first)).mockResolvedValueOnce(reply(reviewed));
     const generated = await writer.generate('quick', original);
-    expect(generated.scenes[0].visual).toBe('Confira a revisão');
-    expect(generated.scenes[0].sourceIds).toEqual(['quantitativos']);
-    expect(generated.sources.map(source => source.id)).toEqual(['quantitativos', 'documentos']);
+    expect(generated.scenes[0].visual).toBe('O que muda com o desconto dos vãos?');
+    expect(generated.scenes[0].sourceIds).toEqual(['banheiro-r01']);
+    expect(generated.sources.map(source => source.id)).toEqual(['banheiro-r01']);
+    expect(fake.create.mock.calls[1][0].messages[1].content).not.toContain('folga-cronograma');
 
-    fake.create.mockResolvedValueOnce(reply(first)).mockResolvedValueOnce(reply({ ...reviewed, captionSourceIds: ['inventada'] }));
-    await expect(writer.generate('quick', original)).rejects.toThrow('incompleto');
+    fake.create.mockResolvedValueOnce(reply({ ...first, sourceId: 'inventada' }));
+    await expect(writer.generate('quick', original)).rejects.toThrow('fonte verificável');
     fake.create.mockResolvedValueOnce(reply(first)).mockRejectedValueOnce(new Error('provider unavailable'));
     await expect(writer.generate('quick', original)).rejects.toThrow('revisão crítica');
+    fake.create.mockResolvedValueOnce(reply(first)).mockResolvedValueOnce(reply({
+      ...reviewed, cards: [{ headline: 'Escopo claro', body: 'Peça clareza e verifique os critérios da proposta.' }],
+    }));
+    await expect(writer.generate('quick', original)).rejects.toThrow('exemplo ou critério verificável');
     expect(original.scenes).toEqual([]);
+  });
+
+  it('refuses an unsupported theme without sending a second request', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-key');
+    const original = document();
+    original.identity.visualStyle = quickStyle('carousel', 'O');
+    fake.create.mockResolvedValueOnce(reply({ unsupported: true }));
+    await expect(new StudioWriterService().generate('quick', original)).rejects.toThrow('tema ainda não tem uma fonte concreta');
+    expect(fake.create).toHaveBeenCalledTimes(1);
   });
 
   it('rejects unsupported edits and records approval only after a new critical review', async () => {

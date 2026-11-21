@@ -10,8 +10,7 @@ ENV NEXT_PUBLIC_VERSION=$NEXT_PUBLIC_VERSION \
 COPY . /app
 RUN npm install --prefix /tmp/editor-deps --ignore-scripts --no-audit --no-fund fflate@0.8.2 \
  && cp -a /tmp/editor-deps/node_modules/fflate node_modules/fflate
-RUN NODE_OPTIONS=--max-old-space-size=6144 pnpm run build:backend \
- && NODE_OPTIONS=--max-old-space-size=6144 pnpm run build:frontend
+RUN NODE_OPTIONS=--max-old-space-size=6144 pnpm run build:frontend
 RUN rm -rf apps/frontend/.next/cache \
  && find apps/frontend/.next -type f -name '*.map' -delete \
  && cp -aL node_modules/fflate /tmp/fflate
@@ -19,5 +18,4 @@ RUN rm -rf apps/frontend/.next/cache \
 FROM scratch AS artifacts
 COPY --from=build /app/apps/frontend/.next /frontend
 COPY --from=build /app/apps/frontend/public/confenge-studio /brand
-COPY --from=build /app/apps/backend/dist /backend
 COPY --from=build /tmp/fflate /fflate

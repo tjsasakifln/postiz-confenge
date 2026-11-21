@@ -54,11 +54,13 @@ function text(
   style: { y: number; size: number; weight: number; color: string; maxHeight: number; x?: number; width?: number },
 ) {
   const { x = 80, width = 920 } = style;
+  const paragraphs = value.split(/\r?\n/).map(row => row.trim()).filter(Boolean);
+  const textBlocks = [...paragraphs.slice(0, 2), paragraphs.slice(2).join(' ')].filter(Boolean);
   let size = style.size;
   let rows: string[];
   do {
     ctx.font = `${style.weight} ${size}px "CONFENGE Archivo"`;
-    rows = value.split(/\r?\n/).flatMap(row => lines(ctx, row, width));
+    rows = textBlocks.flatMap(row => lines(ctx, row, width));
     if (rows.length * size * 1.18 <= style.maxHeight &&
         rows.every(row => ctx.measureText(row).width <= width)) break;
     size -= 2;

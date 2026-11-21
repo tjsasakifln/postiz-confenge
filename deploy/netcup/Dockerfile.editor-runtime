@@ -2,9 +2,10 @@ ARG BASE_IMAGE=postiz-confenge:d98b1f0fb8dea293a16ce4f565fd791e6b00c1ac
 FROM ${BASE_IMAGE}
 ARG SOURCE_REVISION
 ENV NEXT_PUBLIC_VERSION=$SOURCE_REVISION
-RUN rm -rf /app/apps/frontend/.next /app/apps/backend/dist
+RUN rm -rf /app/apps/frontend/.next /app/apps/backend/dist /app/apps/orchestrator/dist
 COPY frontend /app/apps/frontend/.next
 COPY brand /app/apps/frontend/public/confenge-studio
 COPY backend /app/apps/backend/dist
+COPY orchestrator /app/apps/orchestrator/dist
 COPY fflate /app/node_modules/fflate
 LABEL org.opencontainers.image.revision=$SOURCE_REVISION
