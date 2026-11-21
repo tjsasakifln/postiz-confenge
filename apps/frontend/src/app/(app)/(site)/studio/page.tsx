@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
 import { Suspense } from 'react';
-import { Studio } from '@gitroom/frontend/components/studio/studio.component';
+import { StudioEntry } from '@gitroom/frontend/components/studio/studio.quick';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function StudioPage() {
   return (
     <Suspense fallback={<p className="p-6">Carregando o Estúdio…</p>}>
-      <Studio />
+      <StudioEntry />
     </Suspense>
   );
 }

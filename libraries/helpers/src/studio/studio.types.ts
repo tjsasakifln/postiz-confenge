@@ -6,7 +6,8 @@ export type StudioGenerationStage =
   | 'identity'
   | 'outline'
   | 'script'
-  | 'package';
+  | 'package'
+  | 'quick';
 export type StudioFormat = 'vertical' | 'horizontal' | 'square';
 export type StudioLanguage = 'pt-BR' | 'en' | 'es';
 export type StudioVoice = 'alloy' | 'nova' | 'onyx' | 'shimmer';

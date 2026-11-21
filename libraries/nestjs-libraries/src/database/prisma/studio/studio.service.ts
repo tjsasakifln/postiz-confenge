@@ -32,6 +32,7 @@ import { StudioResearchService } from '@gitroom/nestjs-libraries/studio/studio.r
 import { StudioProductionService } from '@gitroom/nestjs-libraries/studio/studio.production.service';
 import { IntegrationManager } from '@gitroom/nestjs-libraries/integrations/integration.manager';
 import type { CreatePostDto } from '@gitroom/nestjs-libraries/dtos/posts/create.post.dto';
+import { getQuickFormat } from '@gitroom/helpers/studio/studio.quick';
 
 const platforms: StudioPlatform[] = ['youtube', 'instagram', 'linkedin'];
 
@@ -159,6 +160,10 @@ export class StudioService {
     return Promise.all(
       (await this.repository.list(org)).map((row) => this.present(org, row))
     );
+  }
+
+  async suggestQuick(org: string) {
+    return this.writer.suggestQuick(await this.list(org));
   }
 
   async get(org: string, id: string): Promise<StudioProject> {
@@ -501,6 +506,14 @@ export class StudioService {
       }));
     }
     const document = await this.validateDocument(org, candidate);
+    if (title !== undefined && getQuickFormat(document.identity.visualStyle) && document.scenes.length) {
+      const previous = project.document;
+      const reviewIsCurrent = previous.editorialNotes?.some(note => note.startsWith('Revisão crítica automatizada:')) &&
+        this.stageHash(previous, 'script') === this.stageHash(document, 'script') &&
+        this.hash(previous.packages) === this.hash(document.packages);
+      if (reviewIsCurrent) document.editorialNotes = previous.editorialNotes;
+      else await this.writer.verifyQuickEdits(document);
+    }
     const approvals: StudioApprovals = { ...project.approvals };
     const stages: StudioApprovalStage[] = ['identity', 'script', 'package'];
     let invalidate = false;
@@ -531,7 +544,7 @@ export class StudioService {
   ) {
     const project = await this.get(org, id);
     this.assertRevision(project, body.revision);
-    if (body.stage !== 'identity')
+    if (body.stage !== 'identity' && body.stage !== 'quick')
       this.requireApproval(
         project,
         body.stage === 'package' ? 'script' : 'identity'

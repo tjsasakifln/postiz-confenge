@@ -308,7 +308,7 @@ export class StudioUpdateDto extends StudioRevisionDto {
 }
 
 export class StudioGenerateDto extends StudioRevisionDto {
-  @IsIn(['identity', 'outline', 'script', 'package'])
+  @IsIn(['identity', 'outline', 'script', 'package', 'quick'])
   stage: StudioGenerationStage;
 }
 

@@ -13,10 +13,12 @@ import { HealthController } from '@gitroom/orchestrator/health.controller';
 import { StudioActivity } from '@gitroom/orchestrator/activities/studio.activity';
 import { StudioDistributionActivity } from '@gitroom/orchestrator/activities/studio.distribution.activity';
 import { StudioDistributionModule } from '@gitroom/nestjs-libraries/studio/studio.distribution.module';
+import { StudioEditorialBatchActivity } from '@gitroom/orchestrator/activities/studio.editorial.batch.activity';
 
 const activities = [
   StudioActivity,
   StudioDistributionActivity,
+  StudioEditorialBatchActivity,
   PostActivity,
   AutopostActivity,
   EmailActivity,

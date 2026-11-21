@@ -22,3 +22,4 @@ export * from './clipping.workflow';
 export * from './encrypt.tokens.workflow';
 export * from './studio.production.workflow';
 export * from './studio.distribution.workflow';
+export * from './studio.editorial.batch.workflow';
