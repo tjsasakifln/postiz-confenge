@@ -108,6 +108,10 @@
 .editor { display: grid; gap: 14px; }
 .cards, .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .cards button[aria-pressed="true"] { border-color: var(--ink); background: var(--lime); }
+.sources { color: var(--muted); font-size: .87rem; }
+.sources summary { cursor: pointer; color: var(--ink); font-weight: 650; }
+.sources p { margin: 8px 0; }
+.sources a { text-decoration: underline; text-underline-offset: 3px; }
 
 @media (max-width: 820px) {
   .form, .reviewGrid, .suggestionList { grid-template-columns: 1fr; }

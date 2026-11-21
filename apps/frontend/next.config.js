@@ -1,6 +1,8 @@
 // @ts-check
 import { withSentryConfig } from '@sentry/nextjs';
 
+const productionSourceMaps = process.env.CONFENGE_BUILD_SOURCEMAPS !== 'false';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
@@ -28,13 +30,13 @@ const nextConfig = {
   serverExternalPackages: ['isomorphic-dompurify'],
   transpilePackages: ['crypto-hash'],
   // Enable production sourcemaps for Sentry
-  productionBrowserSourceMaps: true,
+  productionBrowserSourceMaps: productionSourceMaps,
 
   // Custom webpack config to ensure sourcemaps are generated properly
   webpack: (config, { buildId, dev, isServer, defaultLoaders }) => {
     // Enable sourcemaps for both client and server in production
     if (!dev) {
-      config.devtool = isServer ? 'source-map' : 'hidden-source-map';
+      config.devtool = productionSourceMaps ? (isServer ? 'source-map' : 'hidden-source-map') : false;
     }
 
     return config;
@@ -69,7 +71,7 @@ export default withSentryConfig(nextConfig, {
 
   // Sourcemap configuration optimized for monorepo
   sourcemaps: {
-    disable: false,
+    disable: !productionSourceMaps,
     // More comprehensive asset patterns for monorepo
     assets: [
       '.next/static/**/*.js',

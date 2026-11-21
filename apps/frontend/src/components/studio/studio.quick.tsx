@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { strToU8, zipSync } from 'fflate';
-import { getQuickFormat, quickFormats, quickStyle, quickNetworks, type QuickFormat, type QuickNetwork, type QuickSuggestions } from '@gitroom/helpers/studio/studio.quick';
+import { getQuickFormat, getQuickTaco, quickFormats, quickStyle, quickNetworks, tacoLabels, tacoOrder, type TacoType, type QuickFormat, type QuickNetwork, type QuickSuggestions } from '@gitroom/helpers/studio/studio.quick';
 import type { StudioDocument, StudioProject } from '@gitroom/helpers/studio/studio.types';
 import { useStudioProject, useStudioProjects, useStudioRequest } from './studio.hooks';
 import { renderQuickCard } from './studio.quick.cards';
@@ -39,6 +39,8 @@ function Review({ project, format, onSaved }: {
   const { document } = draft;
   const scene = document.scenes[selected];
   const caption = document.packages[0]?.description ?? '';
+  const taco = getQuickTaco(document.identity.visualStyle);
+  const review = document.editorialNotes?.find(note => note.startsWith('Revisão crítica automatizada:'));
   const valid = caption.trim() && document.scenes.every(item => item.visual.trim() && item.narration.trim());
 
   useEffect(() => {
@@ -63,7 +65,10 @@ function Review({ project, format, onSaved }: {
   }, [scene, selected, format]);
 
   function edit(next: StudioDocument) {
-    setDraft({ ...draft, document: next });
+    setDraft({ ...draft, document: {
+      ...next,
+      editorialNotes: next.editorialNotes?.filter(note => !note.startsWith('Revisão crítica automatizada:')),
+    } });
     setDirty(true);
     setMessage('');
   }
@@ -87,6 +92,10 @@ function Review({ project, format, onSaved }: {
       if (exportFiles) {
         const images = await Promise.all(document.scenes.map((item, index) => renderQuickCard(item, index, format)));
         const files: Record<string, Uint8Array> = { 'legenda.txt': strToU8(caption.trim() + '\n') };
+        if (document.sources.length) {
+          files['fontes.txt'] = strToU8(document.sources.map(source =>
+            `${source.title}\n${source.url}\n${source.excerpt}`).join('\n\n') + '\n');
+        }
         for (const [index, blob] of images.entries()) {
           files[`${String(index + 1).padStart(2, '0')}-confenge.png`] = new Uint8Array(await blob.arrayBuffer());
         }
@@ -106,7 +115,7 @@ function Review({ project, format, onSaved }: {
       <div className={styles.reviewHeader}>
         <div>
           <h2 id="quick-review">Revisar post</h2>
-          <p>{document.packages[0]?.platform === 'linkedin' ? 'LinkedIn' : 'Instagram'} · {quickFormats[format].label} · {quickFormats[format].width} × {quickFormats[format].height} px</p>
+          <p>{taco ? `${tacoLabels[taco]} · ` : ''}{document.packages[0]?.platform === 'linkedin' ? 'LinkedIn' : 'Instagram'} · {quickFormats[format].label} · {quickFormats[format].width} × {quickFormats[format].height} px</p>
         </div>
         <button className={styles.primary} onClick={() => void finish(true)} disabled={!valid || busy}>
           Baixar pacote (.zip)
@@ -144,6 +153,15 @@ function Review({ project, format, onSaved }: {
               ...document,
               packages: document.packages.map((item, index) => index === 0 ? { ...item, description: event.target.value } : item),
             })} /></label>
+          {document.sources.length > 0 && <details className={styles.sources}>
+            <summary>Fundamentação e revisão</summary>
+            <p>{review || 'Esta versão tem ajustes manuais. Confira as afirmações nas fontes antes de publicar.'}</p>
+            <ul>
+              {document.sources.map(source => <li key={source.id}>
+                <a href={source.url} target="_blank" rel="noreferrer">{source.title}</a>
+              </li>)}
+            </ul>
+          </details>}
           <div className={styles.actions}>
             <button type="button" onClick={() => void finish(false)} disabled={!dirty || !valid || busy}>Salvar revisão</button>
             <button type="button" disabled={!caption.trim()} onClick={async () => {
@@ -173,6 +191,7 @@ function QuickStudio() {
   const [topic, setTopic] = useState('');
   const [format, setFormat] = useState<QuickFormat>('carousel');
   const [network, setNetwork] = useState<QuickNetwork>('instagram');
+  const [taco, setTaco] = useState<TacoType>('T');
   const [audience, setAudience] = useState('Gestores e responsáveis por obras');
   const [objective, setObjective] = useState('Orientar uma decisão prática de obra');
   const [error, setError] = useState('');
@@ -194,10 +213,10 @@ function QuickStudio() {
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void generate(topic, format, network);
+    void generate(topic, format, network, taco);
   }
 
-  async function generate(chosenTopic: string, chosenFormat: QuickFormat, chosenNetwork: QuickNetwork) {
+  async function generate(chosenTopic: string, chosenFormat: QuickFormat, chosenNetwork: QuickNetwork, chosenTaco: TacoType) {
     const title = chosenTopic.trim();
     if (!title || working) return;
     setWorking(true);
@@ -216,7 +235,7 @@ function QuickStudio() {
             ...initial.document, topic: title,
             identity: {
               audience, positioning: 'Engenharia CONFENGE', tone: 'Técnico e direto',
-              visualStyle: quickStyle(chosenFormat), evidence: [], hypotheses: [],
+              visualStyle: quickStyle(chosenFormat, chosenTaco), evidence: [], hypotheses: [],
               brandName: 'CONFENGE', language: 'pt-BR',
               primaryColor: '#061a33', secondaryColor: '#ced62a',
               channel: { platform: chosenNetwork },
@@ -228,7 +247,10 @@ function QuickStudio() {
         method: 'POST', body: JSON.stringify({ revision: prepared.revision, stage: 'quick' }),
       });
       router.replace(`/studio?post=${initial.id}`, { scroll: false });
-      setSuggestions(undefined);
+      setSuggestions(current => current && ({
+        ...current,
+        suggestions: current.suggestions.filter(item => item.topic !== title),
+      }));
       void projects.mutate();
     } catch (cause) {
       setError(errorText(cause));
@@ -259,10 +281,13 @@ function QuickStudio() {
             {working ? 'Gerando post…' : 'Gerar post'}
           </button>
           <details>
-            <summary>Rede, público e objetivo</summary>
+            <summary>Rede, público, objetivo e TACO</summary>
             <div className={styles.details}>
               <label>Rede<select value={network} disabled={working} onChange={event => setNetwork(event.target.value as QuickNetwork)}>
                 {(Object.keys(quickNetworks) as QuickNetwork[]).map(key => <option value={key} key={key}>{quickNetworks[key]}</option>)}
+              </select></label>
+              <label>Tipo de conteúdo<select value={taco} disabled={working} onChange={event => setTaco(event.target.value as TacoType)}>
+                {tacoOrder.map(key => <option value={key} key={key}>{tacoLabels[key]}</option>)}
               </select></label>
               <label>Público<input value={audience} maxLength={200} disabled={working} onChange={event => setAudience(event.target.value)} /></label>
               <label>Objetivo<input value={objective} maxLength={200} disabled={working} onChange={event => setObjective(event.target.value)} /></label>
@@ -272,7 +297,7 @@ function QuickStudio() {
         </form>
         <section className={styles.suggestions} aria-labelledby="quick-suggestions">
           <div className={styles.reviewHeader}>
-            <h2 id="quick-suggestions">Sugestões de post</h2>
+            <h2 id="quick-suggestions">Sequência de posts · TACO</h2>
             <button type="button" disabled={working || suggesting} onClick={() => void suggest()}>
               {suggesting ? 'Lendo histórico…' : 'Sugerir com base no histórico'}
             </button>
@@ -283,14 +308,15 @@ function QuickStudio() {
               <div className={styles.suggestionList}>
                 {suggestions.suggestions.map(item => (
                   <article key={item.topic}>
-                    <p>{quickNetworks[item.network]} · {quickFormats[item.format].label}</p>
+                    <p>{tacoLabels[item.taco]} · {quickNetworks[item.network]} · {quickFormats[item.format].label}</p>
                     <h3>{item.topic}</h3>
                     <p>{item.reason}</p>
                     <button type="button" className={styles.primary} disabled={working} onClick={() => {
                       setTopic(item.topic);
                       setFormat(item.format);
                       setNetwork(item.network);
-                      void generate(item.topic, item.format, item.network);
+                      setTaco(item.taco);
+                      void generate(item.topic, item.format, item.network, item.taco);
                     }}>Aprovar e gerar</button>
                   </article>
                 ))}

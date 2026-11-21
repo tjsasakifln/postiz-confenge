@@ -5,7 +5,8 @@ ARG NEXT_PUBLIC_VERSION
 ENV NEXT_PUBLIC_VERSION=$NEXT_PUBLIC_VERSION \
     NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL \
     STORAGE_PROVIDER=local \
-    NEXT_TELEMETRY_DISABLED=1
+    NEXT_TELEMETRY_DISABLED=1 \
+    CONFENGE_BUILD_SOURCEMAPS=false
 COPY . /app
 RUN npm install --prefix /tmp/editor-deps --ignore-scripts --no-audit --no-fund fflate@0.8.2 \
  && cp -a /tmp/editor-deps/node_modules/fflate node_modules/fflate
