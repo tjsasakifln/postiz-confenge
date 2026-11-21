@@ -130,7 +130,7 @@ export class StudioEditorialBatchService {
             if (job === correlation) return true;
             return (
               batch.metadata?.postiz_scope === stableScope &&
-              ['validating', 'in_progress', 'finalizing'].includes(
+              ['validating', 'in_progress', 'finalizing', 'completed'].includes(
                 batch.status
               )
             );
@@ -140,7 +140,31 @@ export class StudioEditorialBatchService {
       if (!page.hasNextPage?.()) break;
       page = await page.getNextPage();
     }
-    return matches.sort((a, b) => b.created_at - a.created_at)[0];
+    for (const batch of matches.sort(
+      (a, b) => b.created_at - a.created_at
+    )) {
+      if (batch.metadata?.postiz_job === correlation) return batch;
+      if (
+        ['validating', 'in_progress', 'finalizing'].includes(batch.status)
+      )
+        return batch;
+      if (batch.status !== 'completed' || !batch.output_file_id) continue;
+      try {
+        // A completed batch from another workflow attempt is reusable only
+        // while its output still exists. Cleanup deliberately removes it.
+        await client.files.retrieve(batch.output_file_id);
+        return batch;
+      } catch (error) {
+        const status =
+          typeof error === 'object' && error !== null && 'status' in error
+            ? (error as { status?: unknown }).status
+            : undefined;
+        if (status === 404) continue;
+        // An uncertain provider read must not trigger another charged write.
+        throw error;
+      }
+    }
+    return undefined;
   }
 
   private async submit(
