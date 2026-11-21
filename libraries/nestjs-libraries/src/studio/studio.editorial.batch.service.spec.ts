@@ -69,6 +69,17 @@ describe('Studio editorial Batch transport', () => {
     expect(() => decodeEditorialBatchOutput(incomplete, 'wanted')).toThrow('incomplete');
   });
 
+  it('lets Temporal retry transient output reads and treats a missing file as terminal', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'test');
+    const service = new StudioEditorialBatchService({} as any, {} as any);
+    const submission = { batchId: 'accepted', customId: 'wanted' };
+    fake.retrieve.mockResolvedValue({ status: 'completed', output_file_id: 'file' });
+    fake.content.mockRejectedValueOnce(Object.assign(new Error('provider unavailable'), { status: 503 }));
+    await expect(service.poll(submission)).rejects.toThrow('provider unavailable');
+    fake.content.mockRejectedValueOnce(Object.assign(new Error('missing'), { status: 404 }));
+    await expect(service.poll(submission)).resolves.toEqual({ state: 'failed' });
+  });
+
   it('submits a medium-reasoning Sol draft once with deterministic metadata', async () => {
     vi.stubEnv('OPENAI_API_KEY', 'test');
     fake.list.mockResolvedValue({ data: [] });

@@ -234,7 +234,10 @@ export class StudioEditorialBatchService {
       }
       if (!batch) throw error;
     }
-    return { batchId: batch.id, customId };
+    return {
+      batchId: batch.id,
+      customId: batch.metadata?.postiz_job ? phase + '-' + batch.metadata.postiz_job : customId,
+    };
   }
 
   async submitDraft(
@@ -288,14 +291,20 @@ export class StudioEditorialBatchService {
       return { state: 'pending' };
     if (batch.status !== 'completed' || !batch.output_file_id)
       return { state: 'failed' };
+    let output: string;
     try {
       const response = await client.files.content(batch.output_file_id);
+      output = await response.text();
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'status' in error && error.status === 404)
+        return { state: 'failed' };
+      // Let Temporal retry a transient read. The file may be the only copy of a paid result.
+      throw error;
+    }
+    try {
       return {
         state: 'completed',
-        output: decodeEditorialBatchOutput(
-          await response.text(),
-          submission.customId
-        ),
+        output: decodeEditorialBatchOutput(output, submission.customId),
       };
     } catch {
       return { state: 'failed' };
