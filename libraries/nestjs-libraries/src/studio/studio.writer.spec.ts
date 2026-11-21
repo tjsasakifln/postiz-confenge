@@ -55,12 +55,15 @@ describe('TACO and reviewed image posts', () => {
     previous.scenes = [{ id: '1', narration: 'Texto', visual: 'Título', kind: 'card', durationSeconds: 5, sourceIds: [] }];
     fake.create.mockResolvedValue(reply({ items: tacoOrder.map(taco => ({
       topic: `Pauta ${taco}`, network: 'linkedin', format: 'square', reference: 0, angle: 'Próxima decisão de projeto.',
+      sourceId: 'quantitativos',
     })) }));
     const result = await new StudioWriterService().suggestQuick([{
       id: '1', createdAt: '2026-11-21', document: previous, publications: [],
     } as Parameters<StudioWriterService['suggestQuick']>[0][number]]);
     expect(result.suggestions.map(item => item.taco)).toEqual(['A', 'C', 'O', 'T']);
     expect(result.suggestions[0].reason).toContain(previous.topic);
+    expect(result.suggestions[0].reason).toContain('Quantitativos e orçamento de obras');
+    expect(fake.create).toHaveBeenCalledTimes(2);
     expect(result.published).toBe(0);
   });
 
