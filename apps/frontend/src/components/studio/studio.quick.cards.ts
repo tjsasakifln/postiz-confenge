@@ -51,56 +51,22 @@ function lines(ctx: CanvasRenderingContext2D, value: string, width: number) {
 function text(
   ctx: CanvasRenderingContext2D,
   value: string,
-  style: { y: number; size: number; weight: number; color: string; maxHeight: number },
+  style: { y: number; size: number; weight: number; color: string; maxHeight: number; x?: number; width?: number },
 ) {
+  const { x = 80, width = 920 } = style;
   let size = style.size;
   let rows: string[];
   do {
     ctx.font = `${style.weight} ${size}px "CONFENGE Archivo"`;
-    rows = lines(ctx, value, 920);
-    if (rows.length * size * 1.08 <= style.maxHeight &&
-        rows.every(row => ctx.measureText(row).width <= 920)) break;
+    rows = value.split(/\r?\n/).flatMap(row => lines(ctx, row, width));
+    if (rows.length * size * 1.18 <= style.maxHeight &&
+        rows.every(row => ctx.measureText(row).width <= width)) break;
     size -= 2;
   } while (size >= 24);
   ctx.fillStyle = style.color;
   ctx.textBaseline = 'top';
-  rows.forEach((row, index) => ctx.fillText(row, 80, style.y + index * size * 1.08, 920));
-  return style.y + rows.length * size * 1.08;
-}
-
-function grid(ctx: CanvasRenderingContext2D, top: number, height: number, dark: boolean, offset: number) {
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(80, top, 920, height);
-  ctx.clip();
-  ctx.fillStyle = dark ? '#0a294b' : '#e8edea';
-  ctx.fillRect(80, top, 920, height);
-  ctx.strokeStyle = dark ? '#325171' : '#cdd8d5';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  for (let column = 80; column < 1000; column += 44) {
-    ctx.moveTo(column, top);
-    ctx.lineTo(column, top + height);
-  }
-  for (let row = top; row < top + height; row += 44) {
-    ctx.moveTo(80, row);
-    ctx.lineTo(1000, row);
-  }
-  ctx.stroke();
-  ctx.strokeStyle = dark ? brand.lime : '#2d6f2d';
-  ctx.lineWidth = 6;
-  ctx.beginPath();
-  ctx.moveTo(80, top + height * 0.7);
-  ctx.lineTo(334 + offset, top + height * 0.29);
-  ctx.lineTo(580, top + height * 0.55);
-  ctx.lineTo(1000, top + height * 0.16);
-  ctx.stroke();
-  for (const [x, y] of [[334 + offset, 0.29], [580, 0.55]]) {
-    ctx.beginPath();
-    ctx.arc(x, top + height * y, 13, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.restore();
+  rows.forEach((row, index) => ctx.fillText(row, x, style.y + index * size * 1.18, width));
+  return style.y + rows.length * size * 1.18;
 }
 
 export async function renderQuickCard(scene: StudioScene, index: number, format: QuickFormat): Promise<Blob> {
@@ -112,7 +78,7 @@ export async function renderQuickCard(scene: StudioScene, index: number, format:
   canvas.height = height;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('A prévia de imagem não está disponível neste navegador.');
-  const cover = index === 0;
+  const cover = index === 0 && count > 1;
   const last = count > 1 && index === count - 1;
   const dark = cover || index === 2;
   ctx.fillStyle = dark ? brand.navy : last ? brand.lime : brand.paper;
@@ -125,30 +91,30 @@ export async function renderQuickCard(scene: StudioScene, index: number, format:
     y: 217, size: cover ? 98 : 88, weight: 790,
     color: dark ? brand.white : brand.ink, maxHeight: 322,
   });
-  const bodyEnd = text(ctx, scene.narration, {
-    y: titleEnd + 32, size: 42, weight: 470,
-    color: dark ? '#dfe8f2' : brand.ink, maxHeight: 172,
-  });
-  const graphicTop = Math.max(bodyEnd + 54, height * 0.55);
-  const graphicHeight = height - graphicTop - 134;
   if (cover) {
+    const bodyEnd = text(ctx, scene.narration, {
+      y: titleEnd + 32, size: 42, weight: 470, color: '#dfe8f2', maxHeight: 172,
+    });
+    const graphicTop = Math.max(bodyEnd + 54, height * 0.55);
+    const graphicHeight = height - graphicTop - 134;
     // The right-hand crop of the site's sharing image holds the construction photo.
     const sourceHeight = 540 * graphicHeight / 920;
     ctx.drawImage(photo, 660, 374 - sourceHeight / 2, 540, sourceHeight, 80, graphicTop, 920, graphicHeight);
-  } else if (last) {
-    ctx.fillStyle = brand.navy;
-    ctx.fillRect(80, graphicTop, 920, graphicHeight);
-    ctx.fillStyle = brand.white;
-    ctx.font = '650 44px "CONFENGE Archivo"';
-    ctx.fillText('confenge.com.br', 124, graphicTop + graphicHeight / 2 - 24);
-    ctx.fillStyle = brand.lime;
-    ctx.fillText('↗', 912, graphicTop + graphicHeight / 2 - 24);
   } else {
-    grid(ctx, graphicTop, graphicHeight, dark, index * 76);
+    const panelTop = Math.max(titleEnd + 38, 440);
+    const panelHeight = height - panelTop - 134;
+    ctx.fillStyle = last ? brand.navy : dark ? '#0a294b' : '#e8edea';
+    ctx.fillRect(80, panelTop, 920, panelHeight);
+    ctx.fillStyle = dark || last ? brand.lime : brand.navy;
+    ctx.fillRect(80, panelTop, 8, panelHeight);
+    text(ctx, scene.narration, {
+      x: 132, width: 816, y: panelTop + 54, size: 60, weight: 550,
+      color: dark || last ? brand.white : brand.ink, maxHeight: panelHeight - 108,
+    });
   }
   ctx.fillStyle = dark ? '#b8c9d9' : brand.muted;
   ctx.font = '600 23px "CONFENGE Archivo"';
-  if (!last) ctx.fillText('confenge.com.br', 80, height - 88);
+  ctx.fillText('confenge.com.br', 80, height - 88);
   if (count > 1) {
     ctx.textAlign = 'right';
     ctx.fillText(`${String(index + 1).padStart(2, '0')} / ${String(count).padStart(2, '0')}`, 1000, height - 88);
