@@ -7,6 +7,7 @@ export const getTemporalModule = (
   path?: string,
   activityClasses?: any[]
 ) => {
+  const manualStudio = process.env.STUDIO_MANUAL_ONLY === 'true';
   // Queues this worker server should NOT run, comma-separated
   // (e.g. EXCLUDE_QUEUE="reddit,x,twitch"). Use it to pin a queue to a single
   // server: exclude it on every server except the one that should own it.
@@ -41,7 +42,7 @@ export const getTemporalModule = (
           workers: [
             ...[
               { identifier: 'main', maxConcurrentJob: undefined },
-              ...socialIntegrationList,
+              ...(manualStudio ? [] : socialIntegrationList),
             ]
               .filter((f) => f.identifier.indexOf('-') === -1)
               .map((integration) => ({
@@ -70,7 +71,15 @@ export const getTemporalModule = (
                   activityClasses: activityClasses!,
                   autoStart: true,
                   workerOptions: {
-                    maxConcurrentActivityTaskExecutions: concurrency || 1000000,
+                    maxConcurrentActivityTaskExecutions: manualStudio
+                      ? 1
+                      : concurrency || 1000000,
+                    ...(manualStudio
+                      ? {
+                          maxConcurrentWorkflowTaskExecutions: 2,
+                          maxCachedWorkflows: 8,
+                        }
+                      : {}),
                     // By default the SDK throttles heartbeat sends to 60s, so
                     // against the workflow's heartbeatTimeout one dropped send
                     // or a minute of event-loop lag eats most of the margin.
@@ -82,7 +91,7 @@ export const getTemporalModule = (
               }),
             // Activity-only Workers for emails, rate limited server side
             // across all workers to stay under the Resend limit
-            ...Object.values(emailQueues)
+            ...(manualStudio ? [] : Object.values(emailQueues))
               .filter(({ taskQueue }) => !excludeQueues.includes(taskQueue))
               .map(({ taskQueue, perSecond }) => ({
                 taskQueue,

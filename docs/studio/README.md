@@ -77,6 +77,8 @@ cp .env.example .env
 docker compose -f docker-compose.yaml -f docker-compose.studio.yaml up -d --build
 ```
 
+Para o uso contínuo com publicação manual na CONFENGE, siga o [manual de operação na Netcup](NETCUP.md).
+
 O compose original usa `http://localhost:4007` para a configuração local. Para operação externa, ajuste domínio/HTTPS, credenciais de banco, armazenamento e URLs de retorno conforme a instalação Postiz. A distribuição nativa exige os arquivos aprovados em URLs HTTPS acessíveis aos provedores. A configuração local padrão, sozinha, não atende essa exigência.
 
 Um servidor ativo é necessário para trabalhos, uploads, monitoramento, espelhamento e publicações executadas pelo calendário Postiz. Isso é diferente da liberação nativa de um vídeo cujo agendamento já foi confirmado pelo YouTube.
