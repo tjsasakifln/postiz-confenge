@@ -26,7 +26,9 @@ function download(blob: Blob, name: string) {
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = name;
+  document.body.append(anchor);
   anchor.click();
+  anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
@@ -462,8 +464,8 @@ function QuickStudio() {
         )}
         {selectedProject.error && <p role="alert" className={styles.error}>{selectedProject.error.message}</p>}
         {selected && selectedProject.isLoading && <p role="status">Abrindo post…</p>}
-        {batchStatusError && <p role="status">Não foi possível consultar o lote. Vamos tentar novamente.</p>}
-        {project && activeFormat && batch && <BatchProgress batch={batch} retrying={retrying || working} onRetry={() => void retryBatch()} />}
+        {needsBatchStatus && batchStatusError && <p role="status">Não foi possível consultar o lote. Vamos tentar novamente.</p>}
+        {needsBatchStatus && batch && <BatchProgress batch={batch} retrying={retrying || working} onRetry={() => void retryBatch()} />}
         {project && activeFormat && project.document.scenes.length > 0 && <Review key={project.id} project={project} format={activeFormat}
           onSaved={saved => { void selectedProject.mutate(saved, { revalidate: false }); }} />}
       </div>
