@@ -29,6 +29,30 @@ export const StudioButton = ({
   </Button>
 );
 
+export const StudioDownload = ({
+  path,
+  name,
+  children,
+}: {
+  path?: string | null;
+  name?: string | null;
+  children: ReactNode;
+}) => {
+  const href = studioHttpUrl(path ?? undefined);
+  if (!href) return null;
+  return (
+    <a
+      href={href}
+      download={name || true}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="underline focus-visible:ring-2 focus-visible:ring-btnPrimary"
+    >
+      {children}
+    </a>
+  );
+};
+
 export const StudioField = ({
   label,
   value,

@@ -1,0 +1,27 @@
+{
+  "apps": [
+    {
+      "name": "proxy",
+      "script": "/usr/sbin/nginx",
+      "args": ["-g", "daemon off;"],
+      "interpreter": "none"
+    },
+    {
+      "name": "backend",
+      "cwd": "/app/apps/backend",
+      "script": "dist/apps/backend/src/main.js"
+    },
+    {
+      "name": "orchestrator",
+      "cwd": "/app/apps/orchestrator",
+      "script": "dist/apps/orchestrator/src/main.js",
+      "kill_timeout": 30000
+    },
+    {
+      "name": "frontend",
+      "cwd": "/app/apps/frontend",
+      "script": "../../node_modules/next/dist/bin/next",
+      "args": ["start", "-p", "4200"]
+    }
+  ]
+}

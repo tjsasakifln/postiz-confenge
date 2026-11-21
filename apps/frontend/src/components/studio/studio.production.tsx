@@ -20,6 +20,7 @@ import type { StudioDocumentEditorProps } from './studio.project';
 import {
   StudioButton,
   StudioCheck,
+  StudioDownload,
   StudioEmpty,
   StudioField,
   StudioMessage,
@@ -73,6 +74,9 @@ const StudioRenderPreview = ({ render }: { render: StudioRender }) => {
             >
               Abrir vídeo
             </a>
+            <StudioDownload path={path} name={render.name}>
+              Baixar vídeo
+            </StudioDownload>
             <button
               type="button"
               className="underline focus-visible:ring-2 focus-visible:ring-btnPrimary"
@@ -603,6 +607,9 @@ export const StudioProduction = ({
                   <p className="text-xs">Crédito: {item.attribution}</p>
                 )}
                 <div className="flex flex-wrap gap-2">
+                  <StudioDownload path={item.path} name={item.name}>
+                    Baixar arquivo
+                  </StudioDownload>
                   <StudioButton
                     secondary
                     onClick={() => {

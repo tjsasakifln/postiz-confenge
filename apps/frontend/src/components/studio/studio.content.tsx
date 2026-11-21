@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import copy from 'copy-to-clipboard';
 import {
   STUDIO_SOUND_EFFECTS,
   type StudioSoundEffect,
@@ -15,6 +16,7 @@ import type { StudioDocumentEditorProps } from './studio.project';
 import {
   StudioButton,
   StudioCheck,
+  StudioDownload,
   StudioEmpty,
   StudioField,
   StudioMessage,
@@ -659,6 +661,10 @@ export const StudioPackagesEditor = ({
   generateDisabled,
   generating,
 }: StudioDocumentEditorProps & GenerationProps) => {
+  const [copyStatus, setCopyStatus] = useState<{
+    platform: StudioPlatform;
+    message: string;
+  }>();
   const patch = (platform: StudioPlatform, change: Partial<StudioPackage>) =>
     onChange({
       ...document,
@@ -741,6 +747,20 @@ export const StudioPackagesEditor = ({
             url.searchParams.set('utm_campaign', item.utmCampaign);
           trackedUrl = url.href;
         }
+        const postText = [
+          item.title.trim(),
+          item.description.trim(),
+          item.cta.trim(),
+          trackedUrl,
+          item.hashtags
+            .map((tag) => `#${tag.replace(/^#+/, '')}`)
+            .join(' '),
+        ]
+          .filter(Boolean)
+          .join('\n\n');
+        const selectedMedia = item.mediaIds.flatMap((id) =>
+          media.filter((asset) => asset.id === id)
+        );
         return (
           <section
             key={item.platform}
@@ -914,6 +934,42 @@ export const StudioPackagesEditor = ({
                 ))
               )}
             </fieldset>
+            <div className="space-y-3 rounded-lg bg-newBgColor p-3">
+              <h4 className="text-sm font-semibold">Publicar manualmente</h4>
+              {postText && (
+                <pre className="whitespace-pre-wrap break-words font-sans text-sm">
+                  {postText}
+                </pre>
+              )}
+              <StudioButton
+                secondary
+                disabled={!postText}
+                onClick={() =>
+                  setCopyStatus({
+                    platform: item.platform,
+                    message: copy(postText)
+                      ? 'Texto copiado.'
+                      : 'Selecione o texto da prévia para copiar.',
+                  })
+                }
+              >
+                Copiar texto do post
+              </StudioButton>
+              <p role="status" className="text-xs">
+                {copyStatus?.platform === item.platform ? copyStatus.message : ''}
+              </p>
+              {selectedMedia.length > 0 && (
+                <ol className="list-decimal space-y-2 pl-5 text-sm">
+                  {selectedMedia.map((asset) => (
+                    <li key={asset.id}>
+                      <StudioDownload path={asset.path} name={asset.name}>
+                        Baixar {asset.name || 'arquivo'}
+                      </StudioDownload>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
             {item.platform !== 'linkedin' ? (
               <StudioSelect
                 label="Capa ou miniatura do vídeo"
