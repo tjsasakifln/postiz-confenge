@@ -1,6 +1,7 @@
-ARG BASE_IMAGE
+ARG BASE_IMAGE=postiz-confenge:d98b1f0fb8dea293a16ce4f565fd791e6b00c1ac
 FROM ${BASE_IMAGE}
 ARG SOURCE_REVISION
+ENV NEXT_PUBLIC_VERSION=$SOURCE_REVISION
 RUN rm -rf /app/apps/frontend/.next /app/apps/backend/dist
 COPY frontend /app/apps/frontend/.next
 COPY brand /app/apps/frontend/public/confenge-studio

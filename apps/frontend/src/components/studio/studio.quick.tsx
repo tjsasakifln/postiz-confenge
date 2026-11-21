@@ -23,7 +23,11 @@ function download(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
-function Review({ project, format }: { project: StudioProject; format: QuickFormat }) {
+function Review({ project, format, onSaved }: {
+  project: StudioProject;
+  format: QuickFormat;
+  onSaved: (project: StudioProject) => void;
+}) {
   const request = useStudioRequest();
   const [draft, setDraft] = useState(project);
   const [selected, setSelected] = useState(0);
@@ -70,6 +74,7 @@ function Review({ project, format }: { project: StudioProject; format: QuickForm
       body: JSON.stringify({ revision: draft.revision, title: draft.title, document }),
     });
     setDraft(saved);
+    onSaved(saved);
     setDirty(false);
   }
 
@@ -163,8 +168,7 @@ function QuickStudio() {
   const selected = useSearchParams().get('post');
   const projects = useStudioProjects();
   const selectedProject = useStudioProject(selected);
-  const [created, setCreated] = useState<StudioProject>();
-  const project = created?.id === selected ? created : selectedProject.data;
+  const project = selectedProject.data;
   const activeFormat = project && getQuickFormat(project.document.identity.visualStyle);
   const [topic, setTopic] = useState('');
   const [format, setFormat] = useState<QuickFormat>('carousel');
@@ -200,11 +204,10 @@ function QuickStudio() {
           },
         }),
       });
-      const generated = await request<StudioProject>(path + '/generate', {
+      await request<StudioProject>(path + '/generate', {
         method: 'POST', body: JSON.stringify({ revision: prepared.revision, stage: 'quick' }),
       });
-      setCreated(generated);
-      router.replace(`/studio?post=${generated.id}`, { scroll: false });
+      router.replace(`/studio?post=${initial.id}`, { scroll: false });
       void projects.mutate();
     } catch (cause) {
       setError(errorText(cause));
@@ -255,7 +258,9 @@ function QuickStudio() {
           </label>
         )}
         {selectedProject.error && <p role="alert" className={styles.error}>{selectedProject.error.message}</p>}
-        {project && activeFormat && <Review key={project.id} project={project} format={activeFormat} />}
+        {selected && selectedProject.isLoading && <p role="status">Abrindo post…</p>}
+        {project && activeFormat && <Review key={project.id} project={project} format={activeFormat}
+          onSaved={saved => { void selectedProject.mutate(saved, { revalidate: false }); }} />}
       </div>
     </main>
   );

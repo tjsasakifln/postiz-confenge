@@ -132,7 +132,8 @@ export async function renderQuickCard(scene: StudioScene, index: number, format:
   const graphicHeight = height - graphicTop - 134;
   if (cover) {
     // The right-hand crop of the site's sharing image holds the construction photo.
-    ctx.drawImage(photo, 660, 52, 540, 530, 80, graphicTop, 920, graphicHeight);
+    const sourceHeight = 540 * graphicHeight / 920;
+    ctx.drawImage(photo, 660, 374 - sourceHeight / 2, 540, sourceHeight, 80, graphicTop, 920, graphicHeight);
   } else if (last) {
     ctx.fillStyle = brand.navy;
     ctx.fillRect(80, graphicTop, 920, graphicHeight);
@@ -146,7 +147,7 @@ export async function renderQuickCard(scene: StudioScene, index: number, format:
   }
   ctx.fillStyle = dark ? '#b8c9d9' : brand.muted;
   ctx.font = '600 23px "CONFENGE Archivo"';
-  ctx.fillText('confenge.com.br', 80, height - 88);
+  if (!last) ctx.fillText('confenge.com.br', 80, height - 88);
   if (count > 1) {
     ctx.textAlign = 'right';
     ctx.fillText(`${String(index + 1).padStart(2, '0')} / ${String(count).padStart(2, '0')}`, 1000, height - 88);
