@@ -1,0 +1,22 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE} AS build
+ARG NEXT_PUBLIC_BACKEND_URL
+ARG NEXT_PUBLIC_VERSION
+ENV NEXT_PUBLIC_VERSION=$NEXT_PUBLIC_VERSION \
+    NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL \
+    STORAGE_PROVIDER=local \
+    NEXT_TELEMETRY_DISABLED=1
+COPY . /app
+RUN pnpm install --frozen-lockfile --ignore-scripts \
+ && pnpm exec prisma generate --schema ./libraries/nestjs-libraries/src/database/prisma/schema.prisma
+RUN NODE_OPTIONS=--max-old-space-size=6144 pnpm run build:backend \
+ && NODE_OPTIONS=--max-old-space-size=6144 pnpm run build:frontend
+RUN rm -rf apps/frontend/.next/cache \
+ && find apps/frontend/.next -type f -name '*.map' -delete \
+ && cp -aL node_modules/fflate /tmp/fflate
+
+FROM scratch AS artifacts
+COPY --from=build /app/apps/frontend/.next /frontend
+COPY --from=build /app/apps/frontend/public/confenge-studio /brand
+COPY --from=build /app/apps/backend/dist /backend
+COPY --from=build /tmp/fflate /fflate

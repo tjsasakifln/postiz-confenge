@@ -531,7 +531,7 @@ export class StudioService {
   ) {
     const project = await this.get(org, id);
     this.assertRevision(project, body.revision);
-    if (body.stage !== 'identity')
+    if (body.stage !== 'identity' && body.stage !== 'quick')
       this.requireApproval(
         project,
         body.stage === 'package' ? 'script' : 'identity'

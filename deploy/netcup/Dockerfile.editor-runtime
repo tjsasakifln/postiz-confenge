@@ -1,0 +1,9 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+ARG SOURCE_REVISION
+RUN rm -rf /app/apps/frontend/.next /app/apps/backend/dist
+COPY frontend /app/apps/frontend/.next
+COPY brand /app/apps/frontend/public/confenge-studio
+COPY backend /app/apps/backend/dist
+COPY fflate /app/node_modules/fflate
+LABEL org.opencontainers.image.revision=$SOURCE_REVISION
