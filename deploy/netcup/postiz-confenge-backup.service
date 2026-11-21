@@ -1,0 +1,14 @@
+[Unit]
+Description=Backup do Confenge Postiz
+Requires=docker.service
+After=docker.service
+RequiresMountsFor=/mnt/storage-box
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/postiz-confenge
+ExecStart=/bin/bash /opt/postiz-confenge/backup.sh
+Nice=15
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=2h

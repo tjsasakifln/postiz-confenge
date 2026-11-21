@@ -1,0 +1,172 @@
+name: postiz-confenge
+
+x-logging: &logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-service: &service
+  restart: unless-stopped
+  logging: *logging
+
+services:
+  studio:
+    <<: *service
+    image: ${POSTIZ_IMAGE:?Informe a imagem do fork com o SHA do commit}
+    pull_policy: never
+    init: true
+    command:
+      - sh
+      - -ec
+      - |
+        pnpm exec prisma db push --skip-generate --schema ./libraries/nestjs-libraries/src/database/prisma/schema.prisma
+        exec pm2-runtime deploy/netcup/processes.json
+    env_file: ./private/studio.env
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=768
+      MAIN_URL: https://postiz.confenge.com.br
+      FRONTEND_URL: https://postiz.confenge.com.br
+      NEXT_PUBLIC_BACKEND_URL: https://postiz.confenge.com.br/api
+      BACKEND_INTERNAL_URL: http://127.0.0.1:3000
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: default
+      STORAGE_PROVIDER: local
+      UPLOAD_DIRECTORY: /uploads
+      NEXT_PUBLIC_UPLOAD_DIRECTORY: /uploads
+      PM2_HOME: /run/pm2
+      IS_GENERAL: "true"
+      DISABLE_REGISTRATION: "true"
+      STUDIO_MANUAL_ONLY: "true"
+      STUDIO_TEXT_MODEL: gpt-4.1
+    networks: [internal, egress]
+    ports:
+      - "127.0.0.1:18407:5000"
+    volumes:
+      - uploads:/uploads
+      - config:/config
+    tmpfs:
+      - /run/pm2:size=64m,mode=0700
+      - /var/log/nginx:size=32m,mode=0755
+    mem_limit: 2560m
+    cpus: 2.5
+    stop_grace_period: 45s
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - |
+          const endpoints = ['http://127.0.0.1:5000/api/auth/can-register', 'http://127.0.0.1:4200/auth', 'http://127.0.0.1:3002/health/status'];
+          Promise.all(endpoints.map(url => fetch(url, {redirect:'manual', signal:AbortSignal.timeout(5000)}))).then(responses => {
+            if (responses.some(res => !res.ok && res.status !== 307 && res.status !== 308)) process.exitCode = 1;
+          }).catch(() => { process.exitCode = 1; });
+      interval: 45s
+      timeout: 8s
+      retries: 4
+      start_period: 150s
+
+  database:
+    <<: *service
+    image: postgres:16-alpine
+    env_file: ./private/database.env
+    environment:
+      POSTGRES_DB: postiz
+      POSTGRES_USER: postiz
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=55"]
+    networks: [internal]
+    volumes: [db:/var/lib/postgresql/data]
+    mem_limit: 384m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postiz", "-d", "postiz"]
+      interval: 10s
+      timeout: 4s
+      retries: 12
+
+  redis:
+    <<: *service
+    image: redis:7.4.11-alpine
+    env_file: ./private/redis.env
+    command:
+      - sh
+      - -ec
+      - |
+        exec redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes --maxmemory 80mb --maxmemory-policy noeviction
+    networks: [internal]
+    volumes: [redis:/data]
+    mem_limit: 160m
+    cpus: 0.25
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -qx PONG"]
+      interval: 10s
+      timeout: 4s
+      retries: 12
+
+  temporal-database:
+    <<: *service
+    image: postgres:16-alpine
+    env_file: ./private/temporal-db.env
+    environment:
+      POSTGRES_USER: temporal
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=80"]
+    networks: [internal]
+    volumes: [temporal-db:/var/lib/postgresql/data]
+    mem_limit: 448m
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "temporal"]
+      interval: 10s
+      timeout: 4s
+      retries: 12
+
+  temporal:
+    <<: *service
+    image: temporalio/auto-setup:1.28.1
+    env_file: ./private/temporal.env
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: temporal
+      POSTGRES_SEEDS: temporal-database
+      ENABLE_ES: "false"
+      TEMPORAL_NAMESPACE: default
+      DEFAULT_NAMESPACE_RETENTION: 7d
+      NUM_HISTORY_SHARDS: "4"
+      GOMEMLIMIT: 400MiB
+      GOMAXPROCS: "1"
+      DYNAMIC_CONFIG_FILE_PATH: /etc/temporal/config/dynamicconfig/production.yaml
+    networks: [internal]
+    volumes:
+      - ./temporal.yaml:/etc/temporal/config/dynamicconfig/production.yaml:ro
+    mem_limit: 640m
+    cpus: 0.75
+    depends_on:
+      temporal-database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "temporal --address temporal:7233 operator namespace describe --namespace default >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 45s
+
+networks:
+  internal:
+    internal: true
+  egress: {}
+
+volumes:
+  db: {}
+  redis: {}
+  temporal-db: {}
+  uploads: {}
+  config: {}

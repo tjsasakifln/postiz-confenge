@@ -1,0 +1,4 @@
+# Keep workflow identifiers accepted by this fork.
+limit.maxIDLength:
+  - value: 255
+    constraints: {}
